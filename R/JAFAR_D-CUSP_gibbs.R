@@ -349,7 +349,7 @@ gibbs_JAFAR_CUSP <- function(y, X_m, n, M, p_m,                     # input data
     
     eta_LaT[[m]] <- tcrossprod(eta,Lambda_m[[m]])
 
-    # 4.b phi_m ---------------------------------------------------------------
+    ## 4.b phi_m ---------------------------------------------------------------
     for(m in c(1:M)){
       
       r_phi_m     <- t((res_m[[m]]-eta_LaT[[m]])%*%s2_Ga_m[[m]])
