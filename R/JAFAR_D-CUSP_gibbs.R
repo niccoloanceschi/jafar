@@ -138,7 +138,7 @@ gibbs_JAFAR_CUSP <- function(y, X_m, n, M, p_m,                     # input data
     right_thr[which(y_obs<1)] <- 0
   }
   
-  # Check presence of NA in omics data
+  # Check presence of NA in multi-view predictors
   NA_in_X <- max(sapply(X_m,function(df) max(is.na(df))))
   
   if(NA_in_X){

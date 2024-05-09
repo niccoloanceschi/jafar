@@ -81,7 +81,7 @@ cdf_transform <- function(Z_m,Z_m_test=NULL,smoothed=F){
   for(m in 1:Data$M){
     # Train Set
     Z_m[[m]] = qnorm(apply(Z_m[[m]], 2, order_index_na))
-    # Center and Scale Omics Data  
+    # Center and Scale Predictors
     preprocess_X_m[[m]] = caret::preProcess(Z_m[[m]], method = c("center", "scale"))
     Z_m[[m]] = as.matrix(predict(preprocess_X_m[[m]], Z_m[[m]]))
     # Test Set
