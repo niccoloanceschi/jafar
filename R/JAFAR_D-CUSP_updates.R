@@ -12,8 +12,6 @@
 # #   chi_m: real vector (K)
 # #   tau_m: real vector (K_Gm)
 # #   facTfac: real matrix ((K+K_Gm) x (K+K_Gm))
-# # EXTRA:
-# #   noise_loadings: common random noise for numerical comparison: real vector (K+K_Gm)
 
 update_loadings <- function(n, p_m, K, K_Gm, 
                             X_m, facTfac, eta,  phi_m,

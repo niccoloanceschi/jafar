@@ -11,7 +11,6 @@ gibbs_JAFAR_CUSP_init <- function(y, X_m, n, M, p_m,          # input data
                                   a_chi, b_chi,               # slab in 'shared' loadings variances
                                   a_tau, b_tau,               # slab in 'local' loadings variances
                                   alpha, alpha_loc,           # beta dist stick breaking
-                                  iterMax, rel_thr,
                                   seed) {
   
   # random initialization ----

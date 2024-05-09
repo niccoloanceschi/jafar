@@ -1,41 +1,6 @@
 
 is.scalar <- function(x) is.atomic(x) && length(x) == 1L
 
-get_pred_coeff_JAFAR <- function(M,K,K_m,p_m,Theta,s2_inv_y,Lambda_m,Gamma_m,s2_inv_m,rescale_pred=FALSE){
-  beta_m <- list()
-  C_inv <- diag(1,K,K)
-  
-  for(m in 1:M){
-    
-    # TODO: check behavior ----- #
-    mar_std_m = rep(1,p_m[m])
-    if(rescale_pred){
-      mar_std_m = sqrt(1/s2_inv_m[[m]] + rowSums(Lambda_m[[m]]^2) + rowSums(Gamma_m[[m]]^2))
-    }
-    Ga_m = Gamma_m[[m]]/mar_std_m
-    s2_m = s2_inv_m[[m]]*(mar_std_m^2)
-    La_m = Lambda_m[[m]]/mar_std_m
-    # TODO: check behavior ----- #
-    
-    s2_Ga_m = s2_m*Ga_m
-    GaT_s2_La_m = crossprod(s2_Ga_m,La_m)
-    
-    D_m_inv = chol(diag(1.,K_m[m],K_m[m])+crossprod(Ga_m,s2_Ga_m))
-    D_GaT_s2_La_m = backsolve(D_m_inv,forwardsolve(t(D_m_inv),GaT_s2_La_m))
-    
-    C_inv = C_inv + crossprod(La_m,s2_m*La_m) - crossprod(GaT_s2_La_m,D_GaT_s2_La_m)
-    
-    beta_m[[m]] = t(s2_m*La_m - s2_Ga_m%*%D_GaT_s2_La_m)
-  }
-  
-  C_chol = chol(C_inv)
-  Theta_C = backsolve(C_chol,forwardsolve(t(C_chol),Theta))
-  
-  var_y = 1/s2_inv_y + sum(Theta*Theta_C)
-  for(m in 1:M){beta_m[[m]] <- Theta_C%*%beta_m[[m]]}
-  
-  return(list(pred_coeff_m=beta_m, pred_var=var_y))
-}
 
 gibbs_JAFAR_CUSP <- function(y, X_m, n, M, p_m,                     # input data
                              nBurnIn, nMCMC, nThin, seed=123,       # MCMC params
@@ -49,14 +14,13 @@ gibbs_JAFAR_CUSP <- function(y, X_m, n, M, p_m,                     # input data
                              prec0=NULL, prec0m=NULL,               # "local" means
                              var_spike=NULL, var_spike_vb=NULL,    # spike value in loadings variances
                              a_chi=NULL, b_chi=NULL,                # slab in 'shared' loadings variances
-                             a_tau=NULL, b_tau=NULL,                # slab in 'local' loadings variances
+                             a_tau=NULL, b_tau=NULL,                # slab in 'specific' loadings variances
                              alpha=NULL, alpha_loc=NULL,            # beta dist stick breaking
                              t0=-1, t1=-5e-4, t0_adapt=20,          # adaptation
                              get_latent_vars=FALSE,                 # output loadings & latent factor
                              rescale_pred=FALSE,                    # rescale loadings and idiosyncatric noise in computing predictives
                              get_last_sample=FALSE,                 # output full last sample
-                             iterMax=1e3, rel_thr=1e-3,
-                             vb_init=FALSE, vb_rank_only=TRUE
+                             binary_y=FALSE
                              ){
   
   set.seed(seed)
@@ -70,7 +34,9 @@ gibbs_JAFAR_CUSP <- function(y, X_m, n, M, p_m,                     # input data
   
   # bounds on number of latent factors
   if(is.null(Kmax)){Kmax=max(min(floor(log(p_m)*3)),K0)}
-  if(is.null(Kmax_m)){Kmax_m=pmax(floor(log(p_m)*3),K0_m)} else if(is.scalar(Kmax_m)){Kmax_m=rep(Kmax_m,M)}
+  if(is.null(Kmax_m)){if(is.null(K0_m)){Kmax_m=floor(log(p_m)*3)
+    } else {Kmax_m=pmin(floor(log(p_m)*3),K0_m)}
+  } else if(is.scalar(Kmax_m)){Kmax_m=rep(Kmax_m,M)}
   
   # initial number of latent factors
   if(is.null(K0)){K0=Kmax-1} else {K0=min(K0,Kmax-1)}
@@ -79,39 +45,39 @@ gibbs_JAFAR_CUSP <- function(y, X_m, n, M, p_m,                     # input data
   } else {K0_m=pmin(K0_m,Kmax_m-1)}
   
   # hyperparams response noise
-  if(is.null(a_sig)){a_sig=1}
-  if(is.null(b_sig)){b_sig=0.3}
+  if(is.null(a_sig)){a_sig=3}
+  if(is.null(b_sig)){b_sig=1}
   
   # hyperparams idiosyncratic noises across modalities
-  if(is.null(a_m)){a_m=rep(1,M)} else if(is.scalar(a_m)){a_m=rep(a_m,M)}
-  if(is.null(b_m)){b_m=rep(0.3,M)} else if(is.scalar(b_m)){b_m=rep(b_m,M)}
+  if(is.null(a_m)){a_m=rep(3,M)} else if(is.scalar(a_m)){a_m=rep(a_m,M)}
+  if(is.null(b_m)){b_m=rep(1,M)} else if(is.scalar(b_m)){b_m=rep(b_m,M)}
   
-  # hyperparams "local" mean for responses & across modalities
-  if(is.null(prec0)){prec0=1/0.5}
-  if(is.null(prec0m)){prec0m=rep(1/0.5,M)} else if(is.scalar(prec0m)){prec0m=rep(prec0m,M)}
+  # hyperparams intercepts for responses & across modalities
+  if(is.null(prec0)){prec0=1}
+  if(is.null(prec0m)){prec0m=rep(1,M)} else if(is.scalar(prec0m)){prec0m=rep(prec0m,M)}
   
   # hyperparams slab in response loadings variances
-  if(is.null(a_theta)){a_theta=3}
+  if(is.null(a_theta)){a_theta=0.5}
   if(is.null(b_theta)){b_theta=0.1}
   
   # hyperparams spike in response loadings variances
   if(is.null(var_spike_theta)){var_spike_theta=0.005}
   
-  # hyperparams mixutre weight in response loadings variances
-  if(is.null(a_xi)){a_xi=5}
-  if(is.null(b_xi)){b_xi=5}
+  # hyperparams mixture weight in response loadings variances
+  if(is.null(a_xi)){a_xi=3}
+  if(is.null(b_xi)){b_xi=2}
   
   # hyperparam spike value in loadings variances
   if(is.null(var_spike)){var_spike=rep(0.005,M)} else if(is.scalar(var_spike)){var_spike=rep(var_spike,M)}
   if(is.null(var_spike)){var_spike=rep(0.005,M)} else if(is.scalar(var_spike)){var_spike=rep(var_spike,M)}
   
   # hyperparams slab in 'shared' loadings variances
-  if(is.null(a_chi)){a_chi=rep(1,M)} else if(is.scalar(a_chi)){a_chi=rep(a_chi,M)}
-  if(is.null(b_chi)){b_chi=rep(0.2,M)} else if(is.scalar(b_chi)){b_chi=rep(b_chi,M)}
+  if(is.null(a_chi)){a_chi=rep(0.5,M)} else if(is.scalar(a_chi)){a_chi=rep(a_chi,M)}
+  if(is.null(b_chi)){b_chi=rep(0.1,M)} else if(is.scalar(b_chi)){b_chi=rep(b_chi,M)}
   
-  # hyperparams slab in 'local' loadings variances
-  if(is.null(a_tau)){a_tau=rep(1,M)} else if(is.scalar(a_tau)){a_tau=rep(a_tau,M)}
-  if(is.null(b_tau)){b_tau=rep(0.2,M)} else if(is.scalar(b_tau)){b_tau=rep(b_tau,M)}
+  # hyperparams slab in 'specific' loadings variances
+  if(is.null(a_tau)){a_tau=rep(0.5,M)} else if(is.scalar(a_tau)){a_tau=rep(a_tau,M)}
+  if(is.null(b_tau)){b_tau=rep(0.1,M)} else if(is.scalar(b_tau)){b_tau=rep(b_tau,M)}
   
   # hyperparam beta dist stick breaking
   if(is.null(alpha)){alpha=rep(5,M)} else if(is.scalar(alpha)){alpha=rep(alpha,M)}
@@ -130,8 +96,6 @@ gibbs_JAFAR_CUSP <- function(y, X_m, n, M, p_m,                     # input data
   
   var_y_MC  <- array(NA,c(nEff))
   
-  pred_var_MC <- array(NA,c(nEff))
-  
   K_MC        <- array(NA,nEff) # overall NUMBER OF retained shared elements
   K_T_eff_MC  <- array(NA,nEff) # NUMBER OF active elements in Theta
   K_Lm_eff_MC <- array(NA,c(nEff,M)) # NUMBER OF active columns in Lambda_m
@@ -140,7 +104,7 @@ gibbs_JAFAR_CUSP <- function(y, X_m, n, M, p_m,                     # input data
   K_Gm_eff_MC <- array(NA,c(nEff,M)) # NUMBER OF active columns in Gamma_m
   
   Lambda_m_MC <- Gamma_m_MC <- phi_m_MC <- s2_inv_m_MC <- mu_m_MC <- list()
-  Marg_Var_m_MC <- Omega_m_mean <- pred_coeff_m_MC <- list()
+  Marg_Var_m_MC <- Cov_m_mean <- list()
   
   active_T_MC <- array(0,c(nEff,Kmax))
   active_L_MC <- array(0,c(nEff,Kmax,M))
@@ -156,12 +120,23 @@ gibbs_JAFAR_CUSP <- function(y, X_m, n, M, p_m,                     # input data
     s2_inv_m_MC[[m]]   <- array(NA,c(nEff,p_m[m]))
     mu_m_MC[[m]]       <- array(0.,c(nEff,p_m[m]))
     
-    Omega_m_mean[[m]]  <- matrix(0,p_m[m],p_m[m])
-    
-    pred_coeff_m_MC[[m]] <- array(NA,c(nEff,p_m[m]))
+    Cov_m_mean[[m]]  <- matrix(0,p_m[m],p_m[m])
   }
   
-  # ------ Missing Data --------------------------------------------------------
+  if(binary_y){ y_MC <- matrix(NA,nEff,n) }
+  
+  # ------ Latent Utilities & Missing Data --------------------------------------------------------
+
+  # Re-name Binary Response
+  if(binary_y){
+    y_obs <- y
+    
+    left_thr = rep(-Inf,n)
+    right_thr = rep(Inf,n)
+    
+    left_thr[which(y_obs>0)] <- 0
+    right_thr[which(y_obs<1)] <- 0
+  }
   
   # Check presence of NA in omics data
   impute_na <- max(sapply(X_m,function(df) max(is.na(df))))
@@ -196,13 +171,12 @@ gibbs_JAFAR_CUSP <- function(y, X_m, n, M, p_m,                     # input data
                                     var_spike_theta,            # spike value in response loadings variances
                                     a_xi, b_xi,                 # mixture weight in response loadings variances
                                     a_m, b_m,                   # idiosyncratic noises
-                                    prec0, prec0m,              # "local" means
+                                    prec0, prec0m,              # intercepts
                                     var_spike, var_spike_vb,    # spike value in loadings variances
                                     a_chi, b_chi,               # slab in 'shared' loadings variances
-                                    a_tau, b_tau,               # slab in 'local' loadings variances
+                                    a_tau, b_tau,               # slab in 'specific' loadings variances
                                     alpha, alpha_loc,           # beta dist stick breaking
-                                    iterMax, rel_thr,
-                                    seed, vb_init, vb_rank_only)
+                                    seed)
   
   get_env = environment()
   list2env(par_init,envir=get_env)
@@ -210,7 +184,12 @@ gibbs_JAFAR_CUSP <- function(y, X_m, n, M, p_m,                     # input data
   
   s2_Ga_m <- D_m_chol <- res_m <- eta_LaT <- phi_GaT <- list()
   
-  for(m in 1:M){res_m[[m]] <- X_m[[m]]-matrix(mu_m[[m]],n,p_m[m],byrow=T)}
+  if(binary_y){ 
+    s2_inv <- 1
+    mu_y   <- qnorm(mean(y_obs))
+  }
+
+  Theta   <- rep(0,K)
   
   # ------ Gibbs Sampler Updates -----------------------------------------------
   
@@ -219,7 +198,13 @@ gibbs_JAFAR_CUSP <- function(y, X_m, n, M, p_m,                     # input data
   
   for(t in c(1:nMCMC)){
     
-    # STEP 0: Missing Data Imputation ------------------------------------------
+    # STEP 0: Latent Utilities & Missing Data Imputation -----------------------
+
+    if(binary_y){
+      linPred <- rep(mu_y,n) + c(eta%*%Theta)
+      # y <- linPred + (2*y_obs-1)*truncnorm::rtruncnorm(n, a=-(2*y_obs-1)*linPred, b=rep(Inf,n))
+      y <- truncnorm::rtruncnorm(n, a=left_thr, b=right_thr, mean=linPred, sd=1)
+    }
     
     if(impute_na & t>t_delay){
       for(m in 1:M){
@@ -240,20 +225,23 @@ gibbs_JAFAR_CUSP <- function(y, X_m, n, M, p_m,                     # input data
     
     # STEP 1: Loadings ---------------------------------------------------------
     
-    ## 1.a Theta ---------------------------------------------------------------
-    
     etaTeta <- crossprod(eta)
     
-    Q_Theta      <- diag(chi,K,K)+s2_inv*etaTeta
-    r_Theta      <- s2_inv*crossprod(eta,y-rep(mu_y,n))
+    ## 1.a Theta & mu_y --------------------------------------------------------
+    
+    etaTeta_mu <- rbind(c(n,colSums(eta)),cbind(colSums(eta),etaTeta))
+    
+    Q_Theta      <- diag(c(prec0,chi),K+1,K+1)+s2_inv*etaTeta_mu
+    r_Theta      <- s2_inv*crossprod(cbind(rep(1,n),eta),y)
     
     L_Theta      <- t(chol(Q_Theta))
     Lr_Theta     <- forwardsolve(L_Theta, r_Theta)
     
     mean_Theta   <- backsolve(t(L_Theta), Lr_Theta)
-    std_Theta    <- backsolve(t(L_Theta), rnorm(K))
+    std_Theta    <- backsolve(t(L_Theta), rnorm(K+1))
     
-    Theta <- as.vector(mean_Theta + std_Theta)
+    mu_y  <- as.vector(mean_Theta[1] + std_Theta[1])[1]
+    Theta <- as.vector(mean_Theta[-1] + std_Theta[-1])
     
     ## 1.b Lambda_m, Gamma_m ---------------------------------------------------
     
@@ -281,36 +269,28 @@ gibbs_JAFAR_CUSP <- function(y, X_m, n, M, p_m,                     # input data
     
     # STEP 2: Intercepts -------------------------------------------------------
     
-    ## 2.a mu_y ----------------------------------------------------------------
-    
-    if(t>t_delay){
-      # mu_y <- (mean(y)-sum(colMeans(eta)*Theta)/(1+prec0/(n*s2_inv)) + sqrt(1/(prec0+n*s2_inv))*rnorm(1)
-      ## NB: Standardized Data, thus mean(y) == 0
-      mu_y <- -sum(colMeans(eta)*Theta)/(1+prec0/(n*s2_inv)) + sqrt(1/(prec0+n*s2_inv))*rnorm(1) 
-    }
-    
     ## 2.b mu_m ----------------------------------------------------------------
     
     if(t>t_delay){
       for(m in 1:M){
-        vec_m      <- colMeans(eta_LaT[[m]]) + colMeans(phi_GaT[[m]])
-        # mean_mu_m  <- (colMeans(X_m[[m]])-vec_m)*s2_inv_m[[m]]/(s2_inv_m[[m]]+prec0m[m]/n)
-        ## NB: Standardized Data, thus colMeans(X_m[[m]]) == 0
-        mean_mu_m  <- -vec_m/(1+prec0m[m]/(n*s2_inv_m[[m]]))
-        mu_m[[m]]  <- mean_mu_m + sqrt(1/(prec0m[m]+n*s2_inv_m[[m]]))*rnorm(p_m[m])
-        
-        res_m[[m]] <- X_m[[m]]-matrix(mu_m[[m]],n,p_m[m],byrow=T)
+        vec_m <- colMeans(X_m[[m]]) - colMeans(eta_LaT[[m]]) - colMeans(phi_GaT[[m]])
+        mean_mu_m <- vec_m*s2_inv_m[[m]]/(s2_inv_m[[m]]+prec0m[m]/n)
+        mu_m[[m]] <- mean_mu_m + sqrt(1/(prec0m[m]+n*s2_inv_m[[m]]))*rnorm(p_m[m])
       }
     }
     
     # STEP 3: Idiosyncratic components -----------------------------------------
     
     ## 3.a s2_inv --------------------------------------------------------------
-    s2_inv <- rgamma(1,shape=a_sig+0.5*n,rate=b_sig+0.5*sum((y-rep(mu_y,n)-eta%*%Theta)^2))
+    if(!binary_y){
+      res_y <- y-rep(mu_y,n)-eta%*%Theta
+      s2_inv <- rgamma(1,shape=a_sig+0.5*n,rate=b_sig+0.5*sum(res_y^2))
+    }
     
     ## 3.b s2_inv_m ------------------------------------------------------------
     for(m in c(1:M)){
-      vec_m         <- eta_LaT[[m]] + phi_GaT[[m]]
+      res_m[[m]] <- X_m[[m]]-matrix(mu_m[[m]],n,p_m[m],byrow=T)
+      vec_m      <- eta_LaT[[m]] + phi_GaT[[m]]
       s2_inv_m[[m]] <- rgamma(p_m[m],shape=a_m[m]+0.5*n,rate=1) * 
         1/(b_m[m]+0.5*colSums((res_m[[m]]-vec_m)^2))
     }
@@ -346,21 +326,17 @@ gibbs_JAFAR_CUSP <- function(y, X_m, n, M, p_m,                     # input data
     std_eta  <- backsolve(t(L_eta), matrix(rnorm(K*n),K,n))
     
     eta      <- t(mean_eta + std_eta)
-    
-    eta_LaT[[m]] <- tcrossprod(eta,Lambda_m[[m]])
 
     ## 4.b phi_m ---------------------------------------------------------------
     for(m in c(1:M)){
       
-      r_phi_m     <- t((res_m[[m]]-eta_LaT[[m]])%*%s2_Ga_m[[m]])
+      r_phi_m     <- t((res_m[[m]]-tcrossprod(eta,Lambda_m[[m]]))%*%s2_Ga_m[[m]])
       Lr_phi_m    <- forwardsolve(D_m_chol[[m]], r_phi_m)
       
       mean_phi_m  <- backsolve(t(D_m_chol[[m]]), Lr_phi_m)
       std_phi_m   <- backsolve(t(D_m_chol[[m]]), matrix(rnorm(K_Gm[m]*n),K_Gm[m],n))
       
       phi_m[[m]]  <- t(mean_phi_m + std_phi_m)
-      
-      phi_GaT[[m]] <- tcrossprod(phi_m[[m]],Gamma_m[[m]])
     }
       
     # STEP 5: Latent indicatirs ------------------------------------------------
@@ -382,16 +358,20 @@ gibbs_JAFAR_CUSP <- function(y, X_m, n, M, p_m,                     # input data
     lonP_Spikes <- - 0.5*Theta^2/var_spike_theta - rep(0.5*log(2*pi*var_spike_theta),K)
     logP_Slabs  <- - (0.5+a_theta)*log(1+0.5*Theta^2/b_theta) +
       rep(lgamma(0.5+a_theta) - lgamma(a_theta) - 0.5*log(2*pi*b_theta),K)
+
     logP_diff[M+1,] <- logP_Slabs - lonP_Spikes
     
-    ### 5.a.1 delta ------------------------------------------------------------
-    
-    # Remarks:  (i)   a priori: $ \xi = P[\delta_h = 0] )
-    #           (ii)  pr_D[l+1,h] = P[\delta_h = l]
+    #| Remarks:
+    #|     (i)  a priori: $ P[\delta_h = 0] = \xi $
+    #|    (ii)  a priori: $ P[\delta_m[m,h] = l] = xi_{m l} $
+    #|   (iii)  implementation: pr_D[l+1,h] = P[\delta_h = l]
+    #|    (iv)  implementation: pr_D[l,h] = P[\delta_m[m,h] = l]
+
+    ## 5.a.1 delta ------ #
     
     delta_max_mm <- matrix(0,M,K)
     for(m in 1:M){
-      delta_max_mm[m,] <- apply(delta_m[-m,],2,max) > c(1:K)
+      delta_max_mm[m,] <- apply(delta_m[-m,,drop=F],2,max) > c(1:K)
     }
     
     # un-normalized probabilities
@@ -406,15 +386,14 @@ gibbs_JAFAR_CUSP <- function(y, X_m, n, M, p_m,                     # input data
     pr_D <- pr_D[2,] / colSums(pr_D)
     
     # sampling 
-    delta  <- rbinom(K,1,pr_D)
+    # delta  <- rbinom(K,1,pr_D)
+    delta  <- c(rbinom(K-1,1,pr_D[-K]),0) # | enforcing last inactive entry in theta
     
     # identifying active components
     active_T <- which(delta==1)
     K_T_eff <- length(active_T)
     
-    ### 5.a.2 delta_m ----------------------------------------------------------
-    
-    # Remark:  pr_D[l,h] = P[\delta_m[m,h] = l]
+    ## 5.a.2 delta_m ------ #
     
     # auxiliary indicators
     I_lh <- ( matrix(1:K,K,K) > matrix(1:K,K,K,byrow=T) )
@@ -422,7 +401,7 @@ gibbs_JAFAR_CUSP <- function(y, X_m, n, M, p_m,                     # input data
     for(m in 1:M){
       
       # auxiliary indicators
-      I_m_lh <- matrix(apply(delta_m[-m,],2,max)>c(1:K),K,K,byrow=T)
+      I_m_lh <- matrix(apply(delta_m[-m,,drop=F],2,max)>c(1:K),K,K,byrow=T)
       I_0_lh <- matrix(delta==1,K,K,byrow=T)
       
       # un-normalized probabilities
@@ -432,9 +411,9 @@ gibbs_JAFAR_CUSP <- function(y, X_m, n, M, p_m,                     # input data
         if(mm==m){
           logP_D <- logP_D + matrix(logP_diff[m,],K,K,byrow=T)*I_lh*(1-(1-I_m_lh)*(1-I_0_lh))
         } else {
-          logP_D <- logP_D + matrix(logP_diff[mm,]*(delta_m[mm,]>c(1:K)),K,K,byrow=T)*
-            (1-(1-I_0_lh)*(1-I_lh)*
-               (1-matrix(apply(delta_m[-c(m,mm),,drop=F],2,max)>c(1:K),K,K,byrow=T)))
+          I_mm_lh <- (1-I_0_lh)*(1-I_lh)
+          if(M>2){I_mm_lh <- I_mm_lh * (1-matrix(apply(delta_m[-c(m,mm),,drop=F],2,max)>c(1:K),K,K,byrow=T))}
+          logP_D <- logP_D + matrix(logP_diff[mm,]*(delta_m[mm,]>c(1:K)),K,K,byrow=T)*(1-I_mm_lh)
         }
       }
 
@@ -442,8 +421,10 @@ gibbs_JAFAR_CUSP <- function(y, X_m, n, M, p_m,                     # input data
       pr_D   <- exp(logP_D - matrix(apply(logP_D, 2, max),K,K,byrow=T))
       pr_D   <- pr_D/matrix(apply(pr_D, 2, sum),K,K,byrow=T)
       
-      # sampling    |    in Hmisc::rMultinom(probs,nsample), the h-th row of `probs` gives the
-      #             |    probabilities for the l classes among which the h-th variable is sampled
+      # sampling
+      #| Remarks:
+      #|    in Hmisc::rMultinom(probs,nsample), the h-th row of `probs` gives the
+      #|    probabilities for the l classes among which the h-th variable is sampled
       delta_m[m,]  <- as.vector(Hmisc::rMultinom(t(pr_D),1))
       
       # identifying active columns
@@ -455,7 +436,7 @@ gibbs_JAFAR_CUSP <- function(y, X_m, n, M, p_m,                     # input data
     
     ## 5.b Specific Components -------------------------------------------------
     
-    ### 5.b.1 z_m ----
+    ### 5.b.1 z_m ---- #
     
     for(m in 1:M){
       
@@ -632,7 +613,6 @@ gibbs_JAFAR_CUSP <- function(y, X_m, n, M, p_m,                     # input data
           
         }
       }
-      
     }
     
     # ------ saving outputs (after thinning) ------ #
@@ -659,9 +639,6 @@ gibbs_JAFAR_CUSP <- function(y, X_m, n, M, p_m,                     # input data
       K_Gm_MC[teff,]     <- K_Gm     # n. of retained columns in Gamma_m
       K_Gm_eff_MC[teff,] <- K_Gm_eff # NUMBER of active columns in Gamma_m
       
-      pred_coeff_y      <- get_pred_coeff_JAFAR(M,K,K_Gm,p_m,Theta,s2_inv,Lambda_m,Gamma_m,s2_inv_m,rescale_pred=rescale_pred)
-      pred_var_MC[teff] <- pred_coeff_y$pred_var
-      
       for(m in c(1:M)){
         if(get_latent_vars){
           Lambda_m_MC[[m]][teff,,1:K] <- Lambda_m[[m]]
@@ -675,10 +652,8 @@ gibbs_JAFAR_CUSP <- function(y, X_m, n, M, p_m,                     # input data
         s2_inv_m_MC[[m]][teff,]   <- s2_inv_m[[m]]
         mu_m_MC[[m]][teff,]       <- mu_m[[m]]
         
-        Omega_m_mean[[m]] <- Omega_m_mean[[m]] +
+        Cov_m_mean[[m]] <- Cov_m_mean[[m]] +
           ( tcrossprod(Lambda_m[[m]]) + tcrossprod(Gamma_m[[m]]) + diag(1/s2_inv_m[[m]]) ) / nEff
-        
-        pred_coeff_m_MC[[m]][teff,] <- pred_coeff_y$pred_coeff_m[[m]]
       }
       
       if(impute_na){
@@ -688,6 +663,8 @@ gibbs_JAFAR_CUSP <- function(y, X_m, n, M, p_m,                     # input data
           }
         }
       }
+
+      if(binary_y){y_MC[teff,] <- y}
       
       teff = teff + 1
     }
@@ -697,12 +674,6 @@ gibbs_JAFAR_CUSP <- function(y, X_m, n, M, p_m,                     # input data
       print(sprintf(fmt = "%10s%3s%2s", "[",(t%/%iter_print)*10,"%]"))
     }
   }
-  
-  # if(impute_na){
-  #   for(m in 1:M){
-  #     X_m[[m]][Xm_na[[m]]] <- NA  
-  #   }
-  # }
   
   hyper_params = list(model='jafar_joint_cusp', 
                       rescale_pred=rescale_pred, 
@@ -720,11 +691,12 @@ gibbs_JAFAR_CUSP <- function(y, X_m, n, M, p_m,                     # input data
   
   output = list(K=K_MC,K_T_eff=K_T_eff_MC,K_Lm_eff=K_Lm_eff_MC,
                 K_Gm=K_Gm_MC,K_Gm_eff=K_Gm_eff_MC,
-                Theta=Theta_MC,var_y=var_y_MC,Omega_m_mean=Omega_m_mean,
+                Theta=Theta_MC,var_y=var_y_MC,Cov_m_mean=Cov_m_mean,
                 s2_inv=s2_inv_MC,mu_y=mu_y_MC,s2_inv_m=s2_inv_m_MC,mu_m=mu_m_MC,
-                pred_coeff_m=pred_coeff_m_MC,pred_var=pred_var_MC,
                 Marg_Var_m=Marg_Var_m_MC,hyper_param=hyper_params,
                 active_Lm=active_L_MC,active_T=active_T_MC)
+
+  if(binary_y){output$y_lat <- y_MC}
   
   if(impute_na){
     output$Xm_MC=Xm_MC
@@ -749,6 +721,7 @@ gibbs_JAFAR_CUSP <- function(y, X_m, n, M, p_m,                     # input data
   
   return(output)
 }
+              
 
 
 
