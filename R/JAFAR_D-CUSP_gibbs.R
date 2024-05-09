@@ -1,26 +1,26 @@
 
 is.scalar <- function(x) is.atomic(x) && length(x) == 1L
 
-
 gibbs_JAFAR_CUSP <- function(y, X_m, n, M, p_m,                     # input data
-                             nBurnIn, nMCMC, nThin, seed=123,       # MCMC params
+                             nBurnIn=5000, nMCMC=2500, nThin=10,    # MCMC params
                              Kmax=NULL, Kmax_m=NULL,                # latent dim bounds
                              K0=NULL, K0_m=NULL,                    # initial number of factors
-                             a_sig=NULL, b_sig=NULL,                # response noise
+                             prec0=NULL, prec0m=NULL,               # intercept prior precisions
+                             a_m=NULL, b_m=NULL,                    # idiosyncratic noises in predictors
+                             a_sig=NULL, b_sig=NULL,                # response noise in response
                              a_theta=NULL, b_theta=NULL,            # slab in response loadings variances
-                             var_spike_theta=NULL,                  # spike value in response loadings variances
-                             a_xi=NULL, b_xi=NULL,                  # mixture weight in response loadings variances
-                             a_m=NULL, b_m=NULL,                    # idiosyncratic noises
-                             prec0=NULL, prec0m=NULL,               # "local" means
-                             var_spike=NULL, var_spike_vb=NULL,    # spike value in loadings variances
                              a_chi=NULL, b_chi=NULL,                # slab in 'shared' loadings variances
                              a_tau=NULL, b_tau=NULL,                # slab in 'specific' loadings variances
-                             alpha=NULL, alpha_loc=NULL,            # beta dist stick breaking
+                             var_spike_theta=NULL,                  # spike value in response loadings variances
+                             a_xi=NULL, b_xi=NULL,                  # mixture weight in response loadings variances
+                             var_spike=NULL,                        # spike value in loadings variances
+                             alpha=NULL, alpha_loc=NULL,            # stick breaking params
                              t0=-1, t1=-5e-4, t0_adapt=20,          # adaptation
                              get_latent_vars=FALSE,                 # output loadings & latent factor
-                             rescale_pred=FALSE,                    # rescale loadings and idiosyncatric noise in computing predictives
+                             rescale_pred=FALSE,                    # rescale to cor in imputing NAs
                              get_last_sample=FALSE,                 # output full last sample
-                             binary_y=FALSE
+                             binary_y=FALSE,                        # is the response binary or continuous?
+                             seed=123
                              ){
   
   set.seed(seed)
@@ -139,9 +139,9 @@ gibbs_JAFAR_CUSP <- function(y, X_m, n, M, p_m,                     # input data
   }
   
   # Check presence of NA in omics data
-  impute_na <- max(sapply(X_m,function(df) max(is.na(df))))
+  NA_in_X <- max(sapply(X_m,function(df) max(is.na(df))))
   
-  if(impute_na){
+  if(NA_in_X){
     # identifying indexes of NA
     Xm0   <- X_m
     Xm_na <- lapply(X_m,function(df) is.na(unname(as.matrix(df))))
@@ -206,7 +206,7 @@ gibbs_JAFAR_CUSP <- function(y, X_m, n, M, p_m,                     # input data
       y <- truncnorm::rtruncnorm(n, a=left_thr, b=right_thr, mean=linPred, sd=1)
     }
     
-    if(impute_na & t>t_delay){
+    if(NA_in_X & t>t_delay){
       for(m in 1:M){
         mar_std_m = rep(1,p_m[m])
         if(rescale_pred){
@@ -656,7 +656,7 @@ gibbs_JAFAR_CUSP <- function(y, X_m, n, M, p_m,                     # input data
           ( tcrossprod(Lambda_m[[m]]) + tcrossprod(Gamma_m[[m]]) + diag(1/s2_inv_m[[m]]) ) / nEff
       }
       
-      if(impute_na){
+      if(NA_in_X){
         for(m in 1:M){
           for(idx in 1:length(na_idx[[m]])){
             Xm_MC[[m]][[idx]][teff,] <- X_m[[m]][na_row_idx[[m]][idx],unlist(na_idx[[m]][idx])]
@@ -698,7 +698,7 @@ gibbs_JAFAR_CUSP <- function(y, X_m, n, M, p_m,                     # input data
 
   if(binary_y){output$y_lat <- y_MC}
   
-  if(impute_na){
+  if(NA_in_X){
     output$Xm_MC=Xm_MC
     output$na_idx=na_idx
     output$na_row_idx=na_row_idx

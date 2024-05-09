@@ -76,9 +76,36 @@ get_Q_smooth <- function(vec){
   return(Q_spline)
 }
 
+cdf_transform <- function(Z_m,Z_m_test=NULL,smoothed=F){
+  preprocess_X_m <- list()
+  for(m in 1:Data$M){
+    # Train Set
+    Z_m[[m]] = qnorm(apply(Z_m[[m]], 2, order_index_na))
+    # Center and Scale Omics Data  
+    preprocess_X_m[[m]] = caret::preProcess(Z_m[[m]], method = c("center", "scale"))
+    Z_m[[m]] = as.matrix(predict(preprocess_X_m[[m]], Z_m[[m]]))
+    # Test Set
+    if(!is.null(Z_m_test)){
+      for(j in 1:Data$p_m[m]){
+        if(smoothed){
+          F_smooth <- get_F_smooth(Z_m[[m]][,j])
+          Z_m_test[[m]][,j] <- qnorm(F_smooth(Z_m_test[[m]][,j]))
+        } else{
+          Z_m_test[[m]][,j] <- qnorm(F_hat(Z_m_test[[m]][,j], Z_m[[m]][,j]))
+        }
+      }
+      Z_m_test[[m]] = as.matrix(predict(preprocess_X_m, Z_m_test[[m]]))
+    }
+  }
+  output <- list(Z_m=Z_m,preprocess_X_m=preprocess_X_m)
+  if(!is.null(Z_m_test)){output$Z_m_test=Z_m_test}
+  return(output)
+}
+
+
 # Induced Regression Coefficients ----
 
-y_pred_coeff_JAFAR <- function(M,K,K_m,p_m,Theta,s2_inv_y,Lambda_m,Gamma_m,s2_inv_m,rescale_pred=FALSE){
+get_coeff_JAFAR <- function(M,K,K_m,p_m,Theta,s2_inv_y,Lambda_m,Gamma_m,s2_inv_m,rescale_pred=FALSE){
   beta_m <- list()
   C_inv <- diag(1,K,K)
   
@@ -112,59 +139,119 @@ y_pred_coeff_JAFAR <- function(M,K,K_m,p_m,Theta,s2_inv_y,Lambda_m,Gamma_m,s2_in
   return(list(pred_coeff_m=beta_m, pred_var=var_y))
 }
 
-# Response Predictions ----
-
-y_pred_JAFAR_from_coeff <- function(Xpred,ris_MCMC){
+coeff_JAFAR <- function(risMCMC,rescale_pred=FALSE){
   
-  M <- length(Xpred)
-  nPred <- nrow(Xpred[[1]])
+  M = length(risMCMC$mu_m)
+  p_m = sapply(risMCMC$mu_m,ncol)
   
-  tMCMC <- dim(ris_MCMC$K_Gm)[1]
+  tMCMC = dim(risMCMC$K_Gm)[1]
+  iter_print <- tMCMC %/% 10 
   
-  mu_MC  <- matrix(NA,tMCMC,nPred)
-  var_MC <- matrix(NA,tMCMC,nPred)
+  pred_coeff_mcmc <- sapply(1:M, function(m) matrix(NA,p_m[m],tMCMC))
+  
+  print(" - Computing Coefficients - ")
+  print(sprintf(fmt = "%10s%3s%2s", "[",0,"%]"))
   
   for(t in 1:tMCMC){
-    mu_MC[t,] <- rep(ris_MCMC$mu_y[t],nPred)
+    
+    Ga_m_t <- lapply(1:M, function(m) risMCMC$Gamma_m[[m]][t,,1:risMCMC$K_Gm[t,m]])
+    La_m_t <- lapply(risMCMC$Lambda_m, function(df) df[t,,1:risMCMC$K[t]])
+    mu_m_t <- lapply(risMCMC$mu_m, function(df) df[t,])
+    s2_m_t <- lapply(risMCMC$s2_inv_m, function(df) df[t,])
+    
+    Theta_t <- risMCMC$Theta[t,1:risMCMC$K[t]]
+    
+    coeff_t <- get_coeff_JAFAR(M,risMCMC$K[t],risMCMC$K_Gm[t,],p_m,
+                              Theta_t,risMCMC$s2_inv[t],La_m_t,Ga_m_t,
+                              s2_m_t,rescale_pred=rescale_pred)
+    
     for(m in 1:M){
-      X_res <- Xpred[[m]]-tcrossprod(rep(1,nPred),ris_MCMC$mu_m[[m]][t,])
-      mu_MC[t,] <- mu_MC[t,] + tcrossprod(ris_MCMC$pred_coeff_m[[m]][t,],X_res)
+      pred_coeff_mcmc[[m]][,t] <- coeff_t$pred_coeff_m[[m]]
+    }
+    
+    if(t %% iter_print == 0){
+      print(sprintf(fmt = "%10s%3s%2s", "[",(t%/%iter_print)*10,"%]"))
     }
   }
   
-  var_MC <- rep(mean(ris_MCMC$pred_var),nPred) + apply(mu_MC,2,var)
-  mu_MC <- colMeans(mu_MC)
+  return(pred_coeff_mcmc)
   
-  return(list(mean=mu_MC,var=var_MC))
 }
 
-y_cond_pred_JAFAR_NA <- function(Xpred,nPred,M,p_m,K,K_m,
-                                   Theta,Lambda_m,Gamma_m,
-                                   mu_y,s2_inv_y,mu_m,s2_inv_m,
-                                   na_row_idx,na_idx,
-                                   rescale_pred=rescale_pred){
-  
-  # browser()
-  # todo <- 'check'
-  # browser()
-  
-  mean_y <- rep(mu_y,nPred)
-  var_y  <- rep(1/s2_inv_y,nPred)
-  
-  Ga_m <- La_m <- s2_Ga_m <- s2_La_m <- C_inv_m <- list()
-  GaT_s2_Ga_m <- GaT_s2_La_m <- LaT_s2_La_m <- D_GaT_s2_La_m <- list()
+# Prediction of Linear Predictor via Sampling of Latent Factors ----
 
+
+y_cond_pred_JAFAR_sampling <- function(Xpred,nPred,M,p_m,K,K_m,
+                                       Theta,Lambda_m,Gamma_m,mu_y,s2_inv_y,mu_m,s2_inv_m,
+                                       rescale_pred=rescale_pred){
+  
+  Q_eta <- diag(1,K,K)
+  r_eta <- rep(0,K)
+  
   for(m in 1:M){
     
     if(!is.null(Xpred[[m]])){
+      
+      mar_std_m = rep(1,p_m[m])
+      if(rescale_pred){
+        mar_std_m = sqrt(1/s2_inv_m[[m]] + rowSums(as.matrix(Lambda_m[[m]]^2)) + rowSums(as.matrix(Gamma_m[[m]]^2)))
+      }
+      Ga_m = Gamma_m[[m]]/mar_std_m
+      s2_m = s2_inv_m[[m]]*(mar_std_m^2)
+      La_m = Lambda_m[[m]]/mar_std_m
+      
+      s2_La_m <- s2_m*La_m
+      s2_Ga_m <- s2_m*Ga_m
+      GaT_s2_La_m = crossprod(s2_Ga_m,La_m)
+      
+      D_m_inv = chol(diag(1.,K_m[m],K_m[m])+crossprod(Ga_m,s2_Ga_m))
+      D_GaT_s2_La_m = backsolve(D_m_inv,forwardsolve(t(D_m_inv),GaT_s2_La_m))
+      
+      res_m <- Xpred[[m]]-rep(1,nPred)%x%t(mu_m[[m]])
+      
+      Q_eta <- Q_eta + crossprod(La_m,s2_La_m) - crossprod(GaT_s2_La_m,D_GaT_s2_La_m)
+      r_eta <- r_eta + t( res_m%*%(s2_La_m - s2_Ga_m%*%D_GaT_s2_La_m) )
+    }
+  }
+  
+  L_eta    <- t(chol(Q_eta))
+  Lr_eta   <- forwardsolve(L_eta, r_eta)
+  
+  mean_eta <- backsolve(t(L_eta), Lr_eta)
+  std_eta  <- backsolve(t(L_eta), matrix(rnorm(K*nPred),K,nPred))
+  
+  eta_mc      <- t(mean_eta + std_eta)
+  
+  lin_pred_y <- rep(mu_y,nPred)+eta_mc%*%Theta
+  
+  return(lin_pred_y)
+}
+
+
+# Linear Predictor via Exact Expression with missing data in features -----
+
+y_cond_pred_JAFAR_NA <- function(Xpred,nPred,M,p_m,K,K_m,
+                                 Theta,Lambda_m,Gamma_m,
+                                 mu_y,s2_inv_y,mu_m,s2_inv_m,
+                                 na_row_idx,na_idx,
+                                 rescale_pred=rescale_pred){
+  
+  lin_pred_y <- rep(mu_y,nPred)
+  
+  Ga_m <- La_m <- s2_Ga_m <- s2_La_m <- C_inv_m <- list()
+  GaT_s2_Ga_m <- GaT_s2_La_m <- LaT_s2_La_m <- D_GaT_s2_La_m <- list()
+  
+  for(m in 1:M){
     
+    if(!is.null(Xpred[[m]])){
+      
       mar_std_m = rep(1,p_m[m])
       if(rescale_pred){
         mar_std_m = sqrt(1/s2_inv_m[[m]] + rowSums(Lambda_m[[m]]^2) + rowSums(Gamma_m[[m]]^2))
       }
       s2_m      <- s2_inv_m[[m]]*(mar_std_m^2)
-      Ga_m[[m]] <- Gamma_m[[m]][,1:K_m[m],drop=F]/mar_std_m
-      La_m[[m]] <- Lambda_m[[m]][,1:K,drop=F]/mar_std_m
+      Ga_m[[m]] <- Gamma_m[[m]]/mar_std_m
+      La_m[[m]] <- Lambda_m[[m]]/mar_std_m
       
       s2_Ga_m[[m]] <- s2_m*Ga_m[[m]]
       s2_La_m[[m]] <- s2_m*La_m[[m]]
@@ -189,170 +276,14 @@ y_cond_pred_JAFAR_NA <- function(Xpred,nPred,M,p_m,K,K_m,
     for(m in 1:M){
       
       if(!is.null(Xpred[[m]])){
-      
+        
         idx_i <- match(i,na_row_idx[[m]])
         
         if(is.na(idx_i)){
           Ci_inv  <- Ci_inv + C_inv_m[[m]]
-          
-          # browser()
-          # todo <- 'check'
-          # browser()
           
           # La_D_Xi <- La_D_Xi + colSums(s2_La_m[[m]]*(Xpred[[m]][i,]-mu_m[[m]])) -
           #   colSums(D_GaT_s2_La_m[[m]]*colSums(s2_Ga_m[[m]]*(Xpred[[m]][i,]-mu_m[[m]])))
-
-          La_D_Xi <- La_D_Xi + crossprod(s2_La_m[[m]],Xpred[[m]][i,]-mu_m[[m]]) -
-            crossprod(D_GaT_s2_La_m[[m]],crossprod(s2_Ga_m[[m]],Xpred[[m]][i,]-mu_m[[m]]))
-          
-          # browser()
-          # todo <- 'check'
-          # browser()
-          
-        } else {
-          
-          idx_m_i <- unlist(na_idx[[m]][idx_i])
-          
-          D_m_inv <- chol( diag(1.,K_m[m],K_m[m]) + GaT_s2_Ga_m[[m]] -
-            crossprod(s2_Ga_m[[m]][idx_m_i,,drop=F],Ga_m[[m]][idx_m_i,,drop=F]) ) 
-          
-          GaT_s2_La_m_NA   <- GaT_s2_La_m[[m]] -
-            crossprod(s2_Ga_m[[m]][idx_m_i,,drop=F],La_m[[m]][idx_m_i,,drop=F]) 
-          
-          D_GaT_s2_La_m_NA <- backsolve(D_m_inv,forwardsolve(t(D_m_inv),GaT_s2_La_m_NA))
-          
-          Ci_inv  <- Ci_inv + LaT_s2_La_m[[m]] -
-            crossprod(s2_La_m[[m]][idx_m_i,,drop=F],La_m[[m]][idx_m_i,,drop=F]) -
-            crossprod(D_GaT_s2_La_m_NA,GaT_s2_La_m_NA)
-          
-          # browser()
-          # todo <- 'check'
-          # browser()
-          
-          La_D_Xi <- La_D_Xi + crossprod(s2_La_m[[m]][-idx_m_i,,drop=F],
-              Xpred[[m]][i,-idx_m_i]-mu_m[[m]][-idx_m_i]) -
-            crossprod(D_GaT_s2_La_m_NA,crossprod(s2_Ga_m[[m]][-idx_m_i,,drop=F],
-              Xpred[[m]][i,-idx_m_i]-mu_m[[m]][-idx_m_i]))
-          
-          # browser()
-          # todo <- 'check'
-          # browser()
-      
-        }
-      }
-    }
-    
-    # browser()
-    # todo <- 'check'
-    # browser()
-    
-    C_chol = chol(Ci_inv)
-    Theta_C = backsolve(C_chol,forwardsolve(t(C_chol),Theta[1:K,drop=F]))
-    
-    var_y[i]  <- var_y[i] + sum(Theta_C*Theta[1:K,drop=F])
-    mean_y[i] <- mean_y[i] + sum(Theta_C*La_D_Xi)
-    
-    # browser()
-    # todo <- 'check'
-    # browser()
-  }
-  
-  return(list(pred_mean=mean_y, pred_var=var_y))
-}
-
-y_pred_JAFAR_NA <- function(Xpred,risMCMC,rescale_pred=FALSE){
-
-  M = length(Xpred)
-  nPred = unlist(sapply(Xpred,nrow))[1]
-  p_m = sapply(Xpred,ncol)
-  
-  get_NA_pred <- get_NA_X(Xpred)
-  na_row_idx  <- get_NA_pred$na_row_idx
-  na_idx      <- get_NA_pred$na_idx
-  
-  tMCMC = dim(risMCMC$K_Gm)[1]
-  iter_print <- tMCMC %/% 10 
-  
-  var_MC <- mu_MC  <- matrix(NA,tMCMC,nPred)
-
-  print(" - Computing Response Predictions - ")
-  print(sprintf(fmt = "%10s%3s%2s", "[",0,"%]"))
-  
-  for(t in 1:tMCMC){
-    
-    La_m_t <- lapply(risMCMC$Lambda_m, function(df) df[t,,])
-    Ga_m_t <- lapply(risMCMC$Gamma_m, function(df) df[t,,])
-    mu_m_t <- lapply(risMCMC$mu_m, function(df) df[t,])
-    s2_m_t <- lapply(risMCMC$s2_inv_m, function(df) df[t,])
-    
-    pred_t <- y_cond_pred_JAFAR_NA(Xpred,nPred,M,p_m,
-      risMCMC$K[t],risMCMC$K_Gm[t,],
-      risMCMC$Theta[t,],La_m_t,Ga_m_t,
-      risMCMC$mu_y[t],risMCMC$s2_inv[t],mu_m_t,s2_m_t,
-      na_row_idx,na_idx,rescale_pred=rescale_pred)
-    
-    var_MC[t,] <- pred_t$pred_var
-    mu_MC[t,]  <- pred_t$pred_mean
-    
-    if(t %% iter_print == 0){
-      print(sprintf(fmt = "%10s%3s%2s", "[",(t%/%iter_print)*10,"%]"))
-    }
-  }
-  
-  var_MC <- colMeans(var_MC) + apply(mu_MC,2,var)
-  mu_MC  <- colMeans(mu_MC)
-  
-  return(list(mean=mu_MC,var=var_MC))
-  
-}
-
-# Omics Predictions ----
-
-X_cond_samples_JAFAR_NA <- function(Xpred,nPred,M,p_m,K,K_m,Lambda_m,Gamma_m,mu_m,s2_inv_m,
-                                    na_row_idx,na_idx,rescale_pred=rescale_pred,nSample=10){
-  
-  X_sample <- lapply(1:M, function(m) array(NA,c(nSample,nPred,p_m[m])))
-  
-  Ga_m <- La_m <- s2_m <- s2_Ga_m <- s2_La_m <- C_inv_m <- list()
-  GaT_s2_Ga_m <- GaT_s2_La_m <- LaT_s2_La_m <- D_GaT_s2_La_m <- list()
-  
-  for(m in 1:M){
-    
-    mar_std_m = rep(1,p_m[m])
-    if(rescale_pred){
-      mar_std_m = sqrt(1/s2_inv_m[[m]] + rowSums(Lambda_m[[m]]^2) + rowSums(Gamma_m[[m]]^2))
-    }
-    s2_m[[m]] <- s2_inv_m[[m]]*(mar_std_m^2)
-    Ga_m[[m]] <- Gamma_m[[m]][,1:K_m[m],drop=F]/mar_std_m
-    La_m[[m]] <- Lambda_m[[m]][,1:K,drop=F]/mar_std_m
-    
-    s2_Ga_m[[m]] <- s2_m[[m]]*Ga_m[[m]]
-    s2_La_m[[m]] <- s2_m[[m]]*La_m[[m]]
-    
-    GaT_s2_Ga_m[[m]] <- crossprod(s2_Ga_m[[m]],Ga_m[[m]])
-    GaT_s2_La_m[[m]] <- crossprod(s2_Ga_m[[m]],La_m[[m]])
-    LaT_s2_La_m[[m]] <- crossprod(s2_La_m[[m]],La_m[[m]])
-    
-    D_m_chol0 <- chol(diag(1.,K_m[m],K_m[m]) + GaT_s2_Ga_m[[m]])
-    
-    D_GaT_s2_La_m[[m]] <- backsolve(D_m_chol0,forwardsolve(t(D_m_chol0),GaT_s2_La_m[[m]]))
-    
-    C_inv_m[[m]] <- LaT_s2_La_m[[m]] - crossprod(GaT_s2_La_m[[m]],D_GaT_s2_La_m[[m]])
-  }
-  
-  for(i in 1:nPred){
-    
-    for(mPred in 1:M){
-      
-      Ci_inv  <- diag(1,K,K)
-      La_D_Xi <- rep(0.,K)
-      
-      for(m in c(1:M)[-mPred]){
-        
-        idx_i <- match(i,na_row_idx[[m]])
-        
-        if(is.na(idx_i)){
-          Ci_inv  <- Ci_inv + C_inv_m[[m]]
           
           La_D_Xi <- La_D_Xi + crossprod(s2_La_m[[m]],Xpred[[m]][i,]-mu_m[[m]]) -
             crossprod(D_GaT_s2_La_m[[m]],crossprod(s2_Ga_m[[m]],Xpred[[m]][i,]-mu_m[[m]]))
@@ -379,123 +310,86 @@ X_cond_samples_JAFAR_NA <- function(Xpred,nPred,M,p_m,K,K_m,Lambda_m,Gamma_m,mu_
                                                  Xpred[[m]][i,-idx_m_i]-mu_m[[m]][-idx_m_i]))
         }
       }
-      
-      C_chol = chol(Ci_inv)
-      C_La_D_Xi = backsolve(C_chol,forwardsolve(t(C_chol),La_D_Xi))
-      
-      X_sample[[mPred]][,i,] = matrix(mu_m[[mPred]] + as.vector(La_m[[mPred]]%*%C_La_D_Xi),nSample,p_m[mPred]) +
-        t(La_m[[mPred]]%*%forwardsolve(t(C_chol),matrix(rnorm(K*nSample),K,nSample)) +
-          Ga_m[[mPred]]%*%matrix(rnorm(K_m[mPred]*nSample),K_m[mPred],nSample) +
-          s2_m[[mPred]]*matrix(rnorm(p_m[mPred]*nSample),p_m[mPred],nSample) )
-      
     }
+    
+    C_chol = chol(Ci_inv)
+    Theta_C = backsolve(C_chol,forwardsolve(t(C_chol),Theta[1:K,drop=F]))
+    
+    lin_pred_y[i] <- lin_pred_y[i] + sum(Theta_C*La_D_Xi)
   }
   
-  return(X_sample)
+  return(lin_pred_y)
 }
 
-X_sample_JAFAR_NA <- function(Xpred,risMCMC,Xtrain=NULL,rescale_pred=FALSE,
-                              copula=F,smoothed=F,nSample=10){
+# Inferred Linear Predictor for out-of-sample observations -----
+
+y_pred_JAFAR <- function(Xpred,risMCMC,rescale_pred=FALSE){
   
+  M = length(Xpred)
   nPred = unlist(sapply(Xpred,nrow))[1]
-  p_m = sapply(risMCMC$s2_inv_m,ncol)
-  M = ncol(risMCMC$K_Gm)
+  p_m = sapply(Xpred,ncol)
   
-  Z_m <- Q_smooth <- list()
-  if(copula){
-    for(m in 1:M){
-      if(smoothed){
-        Q_smooth[[m]] <- lapply(1:p_m[m], function(j) get_Q_smooth(Xtrain[[m]][,j]))
-        F_smooth      <- lapply(1:p_m[m], function(j) get_F_smooth(Xtrain[[m]][,j]))
-        Z_m[[m]] <- qnorm(sapply(1:p_m[m], function(j) F_smooth[[j]](Xpred[[m]][,j]) ))
-      } else {
-        Z_m[[m]] <- qnorm(sapply(1:p_m[m], function(j) F_hat(Xpred[[m]][,j], Xtrain[[m]][,j])))
-      }
-    }
-  } else {
-    Z_m <- Xpred
+  NA_in_X <- max(sapply(X_m,function(df) max(is.na(df))))
+  
+  if(NA_in_X){
+    get_NA_pred <- get_NA_X(Xpred)
+    na_row_idx  <- get_NA_pred$na_row_idx
+    na_idx      <- get_NA_pred$na_idx
   }
   
-  get_NA_pred <- get_NA_X(Xpred)
-  na_row_idx  <- get_NA_pred$na_row_idx
-  na_idx      <- get_NA_pred$na_idx
-  
-  tMCMC = nrow(risMCMC$K_Gm)
+  tMCMC = dim(risMCMC$K_Gm)[1]
   iter_print <- tMCMC %/% 10 
   
-  Z_MC <- lapply(1:M, function(m) array(NA,c(tMCMC*nSample,nPred,p_m[m])))
+  lin_pred_mcmc  <- matrix(NA,nPred,tMCMC)
   
-  print(" - Computing Omics Imputations - ")
+  print(" - Computing Response Predictions - ")
   print(sprintf(fmt = "%10s%3s%2s", "[",0,"%]"))
   
   for(t in 1:tMCMC){
     
-    La_m_t <- lapply(risMCMC$Lambda_m, function(df) df[t,,])
-    Ga_m_t <- lapply(risMCMC$Gamma_m, function(df) df[t,,])
-    mu_m_t <- lapply(risMCMC$mu_m, function(df) df[t,])
-    s2_m_t <- lapply(risMCMC$s2_inv_m, function(df) df[t,])
+    Ga_m_t  <- lapply(1:M, function(m) risMCMC$Gamma_m[[m]][t,,1:risMCMC$K_Gm[t,m],drop=F])
+    La_m_t  <- lapply(risMCMC$Lambda_m, function(df) df[t,,1:risMCMC$K[t],drop=F])
+    mu_m_t  <- lapply(risMCMC$mu_m, function(df) df[t,])
+    s2_m_t  <- lapply(risMCMC$s2_inv_m, function(df) df[t,])
+    Theta_t <- risMCMC$Theta[t,1:risMCMC$K[t]]
     
-    Z_sample <- X_cond_samples_JAFAR_NA(Z_m,nPred,M,p_m,
-                                        risMCMC$K[t],risMCMC$K_Gm[t,],
-                                        La_m_t,Ga_m_t,mu_m_t,s2_m_t,
-                                        na_row_idx,na_idx,nSample=nSample,
-                                        rescale_pred=rescale_pred)
-    
-    for(m in 1:M){ Z_MC[[m]][(1+(t-1)*nSample):(t*nSample),,] <- Z_sample[[m]] }
+    if(NA_in_X){
+      lin_pred_mcmc[,t] <- y_cond_pred_JAFAR_NA(Xpred,nPred,M,p_m,
+                                                risMCMC$K[t],risMCMC$K_Gm[t,],
+                                                Theta_t,La_m_t,Ga_m_t,
+                                                risMCMC$mu_y[t],risMCMC$s2_inv[t],
+                                                mu_m_t,s2_m_t,
+                                                rescale_pred=rescale_pred,
+                                                na_row_idx,na_idx)
+    } else {
+      lin_pred_mcmc[,t] <- y_cond_pred_JAFAR_sampling(Xpred,nPred,M,p_m,
+                                                      risMCMC$K[t],risMCMC$K_Gm[t,],
+                                                      Theta_t,La_m_t,Ga_m_t,
+                                                      risMCMC$mu_y[t],risMCMC$s2_inv[t],
+                                                      mu_m_t,s2_m_t,
+                                                      rescale_pred=rescale_pred)
+    }
     
     if(t %% iter_print == 0){
       print(sprintf(fmt = "%10s%3s%2s", "[",(t%/%iter_print)*10,"%]"))
     }
   }
   
-  if(copula){
-    for(m in 1:M){
-      if(smoothed){
-        for(j in 1:p_m[m]){ Z_MC[[m]][,,j] <- matrix(Q_smooth[[m]][[j]](Z_MC[[m]][,,j]),ncol=nPred) }
-      } else {
-        for(j in 1:p_m[m]){ Z_MC[[m]][,,j] <- Q_hat(pnorm(Z_MC[[m]][,,j]),Xtrain[[m]][,j]) }
-      }
-    }
-  }
+  return(lin_pred_mcmc)
   
-  return(Z_MC)
 }
 
-# Burn-In Removal Ex-Post ----
 
-remove_BurnIn <- function(risMCMC,tBurn){
-  
-  t_idx = c(1:tBurn)
 
-  risMCMC$K <- risMCMC$K[-t_idx]
-  risMCMC$K_T_eff <- risMCMC$K_T_eff[-t_idx]
-  risMCMC$active_T <- risMCMC$active_T[-t_idx,]
-  risMCMC$K_Gm <- risMCMC$K_Gm[-t_idx,]
-  risMCMC$K_Lm_eff <- risMCMC$K_Lm_eff[-t_idx,]
-  risMCMC$K_Gm_eff <- risMCMC$K_Gm_eff[-t_idx,]
-  risMCMC$active_Lm <- risMCMC$active_Lm[-t_idx,,]
-  
-  risMCMC$Theta <- risMCMC$Theta[-t_idx,]
-  risMCMC$var_y <- risMCMC$var_y[-t_idx]
-  risMCMC$s2_inv <- risMCMC$s2_inv[-t_idx]
-  risMCMC$mu_y <- risMCMC$mu_y[-t_idx]
-  risMCMC$pred_var <- risMCMC$pred_var[-t_idx]
-  risMCMC$eta <- risMCMC$eta[-t_idx,,]
-  
-  risMCMC$phi_m <- lapply(risMCMC$phi_m, function(df) df[-t_idx,,])
-  risMCMC$Lambda_m <- lapply(risMCMC$Lambda_m, function(df) df[-t_idx,,])
-  risMCMC$Gamma_m <- lapply(risMCMC$Gamma_m, function(df) df[-t_idx,,])
-  risMCMC$s2_inv_m <- lapply(risMCMC$s2_inv_m, function(df) df[-t_idx,])
-  risMCMC$mu_m <- lapply(risMCMC$mu_m, function(df) df[-t_idx,])
-  risMCMC$Marg_Var_m <- lapply(risMCMC$Marg_Var_m, function(df) df[-t_idx,])
-  risMCMC$pred_coeff_m <- lapply(risMCMC$pred_coeff_m, function(df) df[-t_idx,])
-  
-  if('Xm_MC' %in% names(risMCMC)){
-    risMCMC$Xm_MC <- lapply(risMCMC$Xm_MC, function(ll) lapply(ll,function(df) df[-t_idx,]))
-  }
-  
-  return(risMCMC)  
-}
+
+
+
+
+
+
+
+
+
 
 
 
