@@ -13,12 +13,13 @@ Rcpp::NumericMatrix update_loadings(int n, int p_m, int K, int K_Gm,
   
   arma::mat new_load_m(p_m, K+K_Gm);
   
+  arma::mat prior_prec_mj = diagmat(join_cols(chi_m,tau_m));
+  arma::mat eta_phi_m_T   = (join_rows(eta,phi_m)).t(); 
+  
   for (int j = 0; j < p_m; ++j) {
 
-    arma::vec prior_prec_mj = join_cols(chi_m, tau_m);
-
-    arma::mat Q_load_mj = diagmat(prior_prec_mj) + s2_inv_m(j)*facTfac;
-    arma::vec r_load_mj = s2_inv_m(j) * (join_rows(eta,phi_m)).t() * (X_m.col(j) - mu_m(j)*arma::ones(n));
+    arma::mat Q_load_mj = prior_prec_mj + s2_inv_m(j)*facTfac;
+    arma::vec r_load_mj = s2_inv_m(j) * eta_phi_m_T * (X_m.col(j) - mu_m(j)*arma::ones(n));
 
     arma::mat L_load_mj  = trimatu(chol(Q_load_mj));
     arma::vec Lr_load_mj = solve(trimatl(L_load_mj.t()), r_load_mj);

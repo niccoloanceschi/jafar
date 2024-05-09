@@ -21,11 +21,13 @@ update_loadings <- function(n, p_m, K, K_Gm,
 
   new_Loadings_m <- matrix(0,p_m,K+K_Gm)
   
+  prior_prec_mj <- diag(c(chi_m,tau_m),K+K_Gm,K+K_Gm)
+  eta_phi_m     <- cbind(eta,phi_m)
+  
   for(j in c(1:p_m)){
     
-    prior_prec_mj <- c(chi_m,tau_m)
-    Q_Loadings_mj <- diag(prior_prec_mj,K+K_Gm,K+K_Gm)+s2_inv_m[j]*facTfac
-    r_Loadings_mj <- s2_inv_m[j]*crossprod(cbind(eta,phi_m),X_m[,j]-rep(mu_m[j],n))
+    Q_Loadings_mj <- prior_prec_mj+s2_inv_m[j]*facTfac
+    r_Loadings_mj <- s2_inv_m[j]*crossprod(eta_phi_m,X_m[,j]-rep(mu_m[j],n))
     
     L_Loadings_mj  <- chol(Q_Loadings_mj)
     Lr_Loadings_mj <- forwardsolve(t(L_Loadings_mj), r_Loadings_mj)
