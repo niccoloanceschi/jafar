@@ -7,7 +7,7 @@ gibbs_JAFAR_CUSP_init <- function(y, X_m, n, M, p_m,          # input data
                                   a_xi, b_xi,                 # mixture weight in response loadings variances
                                   a_m, b_m,                   # idiosyncratic noises
                                   prec0, prec0m,              # "local" means
-                                  var_spike, var_spike_vb,    # spike value in loadings variances
+                                  var_spike,                  # spike value in loadings variances
                                   a_chi, b_chi,               # slab in 'shared' loadings variances
                                   a_tau, b_tau,               # slab in 'local' loadings variances
                                   alpha, alpha_loc,           # beta dist stick breaking

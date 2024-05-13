@@ -1,108 +1,4 @@
 
-# Missing Data Identification ----
-
-get_NA_X <- function(X_m){
-  
-  M <- length(X_m)
-  n <- unlist(sapply(X_m,nrow))[1]
-  
-  na_idx <- na_row_idx <- list()
-  
-  for(m in 1:M){
-    
-    if(!is.null(X_m[[m]])){
-      
-      # identifying indexes of NA
-      Xm_na <- is.na(unname(as.matrix(X_m[[m]])))
-      
-      # Containers for output of imputed NA values
-      na_idx[[m]]     <- apply(Xm_na,1,which)
-      na_row_idx[[m]] <- c(1:n)[sapply(na_idx[[m]],length)>0]
-      na_idx[[m]]     <- na_idx[[m]][na_row_idx[[m]]]
-      
-    }
-  }
-  
-  return(list(na_row_idx=na_row_idx,na_idx=na_idx))  
-}
-
-# Copula Functions ----
-
-order_index = function(x){
-  ind = sort(x, index.return = T)$ix
-  x[ind] = (1:length(x))/(length(x)+1)
-  return(x)
-}
-
-order_index_na = function(x){
-  x_na = is.na(x)
-  x[x_na == F] = order_index(x[x_na == F])
-  n = length(x) - sum(x_na)
-  return(x*n/(n+1))
-}
-
-F_hat <- function(xNew,xTrain){
-  x_obs <- xTrain[!is.na(xTrain)]
-  n = length(x_obs)
-  knots = c(-Inf,sort(x_obs))
-  values = c(1/(n+1),c(1:n)/(n+1))
-  
-  sapply(xNew,function(x) max(values[knots<=x]))
-}
-
-Q_hat <- function(pNew,xTrain) {
-  x_obs <- xTrain[!is.na(xTrain)]
-  n <- length(x_obs)
-  knots = c(sort(x_obs),max(x_obs))
-  values = c(1:n)/(n+1)
-  
-  knots[sapply(pNew, function(p) sum(p > values) + 1)]
-}
-
-get_F_smooth <- function(vec){
-  vec <- vec[!is.na(vec)]
-  x_range  <- c(-100,sort(vec),100)
-  # y_range  <- c(0,sort(order_index_na(vec)),1)
-  y_range  <- c(0.001,sort(order_index_na(vec)),0.999)
-  F_spline <- stats::splinefun(x=x_range, y=y_range, method = "hyman", ties= list("ordered", mean))
-  return(F_spline)
-}
-
-get_Q_smooth <- function(vec){
-  vec <- vec[!is.na(vec)]
-  x_range  <- c(0,sort(order_index(vec)),1)
-  y_range  <- c(min(vec),sort(vec),max(vec))
-  Q_spline <- stats::splinefun(x=x_range, y=y_range, method = "hyman", ties= list("ordered", mean))
-  return(Q_spline)
-}
-
-cdf_transform <- function(Z_m,Z_m_test=NULL,smoothed=F){
-  preprocess_X_m <- list()
-  for(m in 1:Data$M){
-    # Train Set
-    Z_m[[m]] = qnorm(apply(Z_m[[m]], 2, order_index_na))
-    # Center and Scale Predictors
-    preprocess_X_m[[m]] = caret::preProcess(Z_m[[m]], method = c("center", "scale"))
-    Z_m[[m]] = as.matrix(predict(preprocess_X_m[[m]], Z_m[[m]]))
-    # Test Set
-    if(!is.null(Z_m_test)){
-      for(j in 1:Data$p_m[m]){
-        if(smoothed){
-          F_smooth <- get_F_smooth(Z_m[[m]][,j])
-          Z_m_test[[m]][,j] <- qnorm(F_smooth(Z_m_test[[m]][,j]))
-        } else{
-          Z_m_test[[m]][,j] <- qnorm(F_hat(Z_m_test[[m]][,j], Z_m[[m]][,j]))
-        }
-      }
-      Z_m_test[[m]] = as.matrix(predict(preprocess_X_m, Z_m_test[[m]]))
-    }
-  }
-  output <- list(Z_m=Z_m,preprocess_X_m=preprocess_X_m)
-  if(!is.null(Z_m_test)){output$Z_m_test=Z_m_test}
-  return(output)
-}
-
-
 # Induced Regression Coefficients ----
 
 get_coeff_JAFAR <- function(M,K,K_m,p_m,Theta,s2_inv_y,Lambda_m,Gamma_m,s2_inv_m,rescale_pred=FALSE){
@@ -329,7 +225,7 @@ y_pred_JAFAR <- function(Xpred,risMCMC,rescale_pred=FALSE){
   nPred = unlist(sapply(Xpred,nrow))[1]
   p_m = sapply(Xpred,ncol)
   
-  NA_in_X <- max(sapply(X_m,function(df) max(is.na(df))))
+  NA_in_X <- max(sapply(Xpred,function(df) max(is.na(df))))
   
   if(NA_in_X){
     get_NA_pred <- get_NA_X(Xpred)
@@ -347,8 +243,8 @@ y_pred_JAFAR <- function(Xpred,risMCMC,rescale_pred=FALSE){
   
   for(t in 1:tMCMC){
     
-    Ga_m_t  <- lapply(1:M, function(m) risMCMC$Gamma_m[[m]][t,,1:risMCMC$K_Gm[t,m],drop=F])
-    La_m_t  <- lapply(risMCMC$Lambda_m, function(df) df[t,,1:risMCMC$K[t],drop=F])
+    Ga_m_t  <- lapply(1:M, function(m) matrix(risMCMC$Gamma_m[[m]][t,,1:risMCMC$K_Gm[t,m]],ncol=risMCMC$K_Gm[t,m]))
+    La_m_t  <- lapply(risMCMC$Lambda_m, function(df) matrix(df[t,,1:risMCMC$K[t]],ncol=risMCMC$K[t]))
     mu_m_t  <- lapply(risMCMC$mu_m, function(df) df[t,])
     s2_m_t  <- lapply(risMCMC$s2_inv_m, function(df) df[t,])
     Theta_t <- risMCMC$Theta[t,1:risMCMC$K[t]]

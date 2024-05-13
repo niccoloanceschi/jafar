@@ -272,7 +272,7 @@ bsfp.predict.oos <- function(bsfp.fit, test_data, response_type='continuous', mo
   # -------------------------------------------------------------------------- #
   
   for (iter in 1:(nsample-1)) {
-    if (progress) svMisc::progress(iter/((nsample-1)/100))
+    if (progress) progress(iter/((nsample-1)/100))
     
     # -------------------------------------------------------------------------- #
     # Storing the current values of the parameters -----
@@ -369,7 +369,7 @@ bsfp.predict.oos <- function(bsfp.fit, test_data, response_type='continuous', mo
         V.draw[[iter+1]][[1,1]] <- t(matrix(sapply(1:n, function(i) {
           bv <-  tU_Sigma %*% X.iter[,i]
           
-          Vi <- MASS::mvrnorm(1, mu = Bv %*% bv, Sigma = Bv)
+          Vi <- mvrnorm(1, mu = Bv %*% bv, Sigma = Bv)
           Vi
         }), nrow = r))
       }
@@ -399,7 +399,7 @@ bsfp.predict.oos <- function(bsfp.fit, test_data, response_type='continuous', mo
       #   V.draw[[iter+1]][[1,1]] <- t(matrix(sapply(1:n, function(i) {
       #     bv <- tU_Sigma %*% X.iter[,i]
       #     
-      #     Vi <- MASS::mvrnorm(1, mu = Bv %*% bv, Sigma = Bv)
+      #     Vi <- mvrnorm(1, mu = Bv %*% bv, Sigma = Bv)
       #     Vi
       #   }), nrow = r))
       # }
@@ -433,7 +433,7 @@ bsfp.predict.oos <- function(bsfp.fit, test_data, response_type='continuous', mo
           Vs.draw[[iter+1]][[1,s]] <- t(matrix(sapply(1:n, function(i) {
             bvs <- (1/error_vars[s]) * t(W.iter[[s,s]]) %*% Xs.iter[, i]
             
-            Vsi <- MASS::mvrnorm(1, mu = Bvs %*% bvs, Sigma = Bvs)
+            Vsi <- mvrnorm(1, mu = Bvs %*% bvs, Sigma = Bvs)
             Vsi
           }), nrow = r.vec[s]))
         }
@@ -472,7 +472,7 @@ bsfp.predict.oos <- function(bsfp.fit, test_data, response_type='continuous', mo
     #       Vs.draw[[iter+1]][[1,s]] <- t(matrix(sapply(1:n, function(i) {
     #         bvs <- tW_Sigma %*% Xs.iter[, i]
     #         
-    #         Vsi <- MASS::mvrnorm(1, mu = Bvs %*% bvs, Sigma = Bvs)
+    #         Vsi <- mvrnorm(1, mu = Bvs %*% bvs, Sigma = Bvs)
     #         Vsi
     #       }), nrow = r.vec[s]))
     #     }

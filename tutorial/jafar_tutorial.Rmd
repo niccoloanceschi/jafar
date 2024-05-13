@@ -1,0 +1,210 @@
+
+```{r}
+rm(list = ls())
+```
+
+# Imports
+
+```{r}
+# source code
+library(truncnorm)
+library(Hmisc)
+library(stats)
+library(caret)
+# postprocessing
+library(infinitefactor)
+# plots
+library(knitr)
+library(rstudioapi)
+library(ggplot2)
+library(latex2exp)
+library(reshape2)
+library(scales)
+library(fields)
+# bsfp predictions
+library(svMisc)
+library(MASS)
+```
+
+```{r setup}
+# set working directory
+working_dir = dirname(getSourceEditorContext()$path)
+opts_knit$set(root.dir = working_dir)
+```
+
+# Source Code
+
+```{r}
+# Import source code 
+# TODO: replace 'library(jafar)'
+source_dir = paste0(dirname(dirname(getSourceEditorContext()$path)),'/R')
+
+file_list = c('JAFAR_D-CUSP_gibbs_sampler.R','JAFAR_D-CUSP_initialization.R','JAFAR_D-CUSP_plots.R',
+              'JAFAR_D-CUSP_postprocessing.R','JAFAR_D-CUSP_predictions.R','JAFAR_D-CUSP_updates.R',
+              'JAFAR_D-CUSP_preprocessing.R')
+
+for(source_file in file_list){
+  source(file.path(source_dir, source_file))
+}
+
+compiled_updates = F
+if(compiled_updates){
+  source_dir = paste0(dirname(dirname(getSourceEditorContext()$path)),'/source')
+  Rcpp::sourceCpp(file.path(source_dir, 'JAFAR_D-CUSP_updates.cpp'))
+}
+```
+
+# Import Data
+
+```{r}
+# Import tutorial data
+data_dir <- dirname(getSourceEditorContext()$path)
+
+Data <- readRDS(file.path(data_dir,"tutorial_data.rds"))
+
+M <- length(Data$X_m)
+p_m <- sapply(Data$X_m,ncol)
+n <- sapply(Data$X_m,nrow)[1]
+nTest <- sapply(Data$X_m_test,nrow)[1]
+```
+
+# Preprocessing Data
+
+```{r}
+# preprocess
+copula = F
+preprocessed_X <- jafar_preprocess_X(Data$X_m,Z_m_test=Data$X_m_test,copula=copula)
+Z_m <- preprocessed_X$Z_m
+Z_m_test <- preprocessed_X$Z_m_test
+
+convert_y_binary = T
+if(convert_y_binary){
+  cens_thr <- quantile(Data$yTrain,0.65)
+  Data$yTrain <- 1*(Data$yTrain > cens_thr)
+  Data$yTest  <- 1*(Data$yTest > cens_thr)
+}
+
+binary_y=as.logical(min(Data$yTrain%%1==0))
+
+if(!binary_y){
+  preprocessed_y <- jafar_preprocess_y(Data$yTrain,yTest=Data$yTest)
+  yTrain <- preprocessed_y$yTrain
+  yTest <- preprocessed_y$yTest
+} else {
+  yTrain <- Data$yTrain
+  yTest <- Data$yTest
+}
+```
+
+# MCMC hyper-params
+
+```{r}
+# mcmc params
+
+nMCMC = 1000
+nBurnIn = 500
+nThin = 10
+
+mcmc_seed=123
+
+Kmax = 30
+Kmax_m = rep(20,M)
+```
+
+# Run Gibbs Sampler
+
+```{r}
+ris_MCMC <- gibbs_JAFAR_CUSP(yTrain, Z_m, n, M, p_m,
+                             nBurnIn, nMCMC, nThin, seed = mcmc_seed,
+                             Kmax=Kmax, Kmax_m=Kmax_m,binary_y=binary_y) 
+```
+
+## Response Predicitions 
+
+```{r}
+y_train_pred <- y_pred_JAFAR(Z_m,ris_MCMC)
+y_test_pred <- y_pred_JAFAR(Z_m_test,ris_MCMC)
+```
+
+## Induced Regression Coefficients
+
+```{r}
+inferred_Coeff <- coeff_JAFAR(ris_MCMC)
+```
+
+## Postprocessing of Shared Component
+
+```{r}
+rotated_variables <- postprocess_JAFAR(ris_MCMC)
+```
+
+# Visualizing Results
+
+```{r}
+output_dir = dirname(getSourceEditorContext()$path)
+dir.create(file.path(output_dir, 'results'), showWarnings = FALSE)
+output_dir = file.path(output_dir, 'results')
+```
+
+## Plot n. of factors
+
+```{r}
+plot_n_fact_shared(ris_MCMC,out_folder=output_dir)
+plot_n_fact_specific(ris_MCMC,out_folder=output_dir)
+```
+
+## Plot Correlations Matrices
+
+```{r}
+plot_cor_jafar(ris_MCMC,Z_m, out_folder=output_dir)
+```
+
+## Plot Response 
+
+```{r}
+plot_pred_jafar(y_train_pred,yTrain,s2y_inv=ris_MCMC$s2_inv,is_binary=binary_y,out_folder=output_dir,title='Train')
+plot_pred_jafar(y_test_pred,yTest,s2y_inv=ris_MCMC$s2_inv,is_binary=binary_y,out_folder=output_dir,title='Test')
+```
+
+## Plot Coefficients
+
+```{r}
+plot_coeff_jafar(inferred_Coeff,out_folder=output_dir)
+```
+
+## Plot Rotated Loadings
+
+```{r}
+plot_loadings_jafar(rotated_variables,out_folder=output_dir)
+```
+
+```{r}
+
+```
+
+```{r}
+
+```
+
+```{r}
+
+```
+
+```{r}
+
+```
+
+```{r}
+
+```
+
+```{r}
+
+```
+
+```{r}
+
+```
+
+
+

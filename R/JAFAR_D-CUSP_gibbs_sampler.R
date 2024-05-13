@@ -16,7 +16,7 @@ gibbs_JAFAR_CUSP <- function(y, X_m, n, M, p_m,                     # input data
                              var_spike=NULL,                        # spike value in loadings variances
                              alpha=NULL, alpha_loc=NULL,            # stick breaking params
                              t0=-1, t1=-5e-4, t0_adapt=20,          # adaptation
-                             get_latent_vars=FALSE,                 # output loadings & latent factor
+                             get_latent_vars=TRUE,                  # output loadings & latent factor
                              rescale_pred=FALSE,                    # rescale to cor in imputing NAs
                              get_last_sample=FALSE,                 # output full last sample
                              binary_y=FALSE,                        # is the response binary or continuous?
@@ -172,7 +172,7 @@ gibbs_JAFAR_CUSP <- function(y, X_m, n, M, p_m,                     # input data
                                     a_xi, b_xi,                 # mixture weight in response loadings variances
                                     a_m, b_m,                   # idiosyncratic noises
                                     prec0, prec0m,              # intercepts
-                                    var_spike, var_spike_vb,    # spike value in loadings variances
+                                    var_spike,                  # spike value in loadings variances
                                     a_chi, b_chi,               # slab in 'shared' loadings variances
                                     a_tau, b_tau,               # slab in 'specific' loadings variances
                                     alpha, alpha_loc,           # beta dist stick breaking
@@ -202,8 +202,8 @@ gibbs_JAFAR_CUSP <- function(y, X_m, n, M, p_m,                     # input data
 
     if(binary_y){
       linPred <- rep(mu_y,n) + c(eta%*%Theta)
-      # y <- linPred + (2*y_obs-1)*truncnorm::rtruncnorm(n, a=-(2*y_obs-1)*linPred, b=rep(Inf,n))
-      y <- truncnorm::rtruncnorm(n, a=left_thr, b=right_thr, mean=linPred, sd=1)
+      # y <- linPred + (2*y_obs-1)*rtruncnorm(n, a=-(2*y_obs-1)*linPred, b=rep(Inf,n))
+      y <- rtruncnorm(n, a=left_thr, b=right_thr, mean=linPred, sd=1)
     }
     
     if(NA_in_X & t>t_delay){
@@ -423,9 +423,9 @@ gibbs_JAFAR_CUSP <- function(y, X_m, n, M, p_m,                     # input data
       
       # sampling
       #| Remarks:
-      #|    in Hmisc::rMultinom(probs,nsample), the h-th row of `probs` gives the
+      #|    in rMultinom(probs,nsample), the h-th row of `probs` gives the
       #|    probabilities for the l classes among which the h-th variable is sampled
-      delta_m[m,]  <- as.vector(Hmisc::rMultinom(t(pr_D),1))
+      delta_m[m,]  <- as.vector(rMultinom(t(pr_D),1))
       
       # identifying active columns
       K_Lm_eff[m] <- 0
@@ -460,7 +460,7 @@ gibbs_JAFAR_CUSP <- function(y, X_m, n, M, p_m,                     # input data
         pr_z   <- pr_z/pr_Tot
         
         # sampling
-        z_m[[m]]  <- as.vector(Hmisc::rMultinom(pr_z,1))
+        z_m[[m]]  <- as.vector(rMultinom(pr_z,1))
       } else {
         z_m[[m]]  <- as.vector(1)
       }
@@ -677,7 +677,6 @@ gibbs_JAFAR_CUSP <- function(y, X_m, n, M, p_m,                     # input data
   
   hyper_params = list(model='jafar_joint_cusp', 
                       rescale_pred=rescale_pred, 
-                      vb_init=vb_init, vb_rank_only=vb_rank_only,
                       nBurnIn=nBurnIn, nMCMC=nMCMC, nThin=nThin, 
                       Kmax=Kmax, Kmax_m=Kmax_m, K0=K0, K0_m=K0_m, 
                       seed=seed, t0=t0, t1=t1, t0_adapt=t0_adapt,
@@ -685,7 +684,7 @@ gibbs_JAFAR_CUSP <- function(y, X_m, n, M, p_m,                     # input data
                       b_xi=b_xi, var_spike_theta=var_spike_theta, 
                       a_sig=a_sig, b_sig=b_sig, prec0=prec0, 
                       a_m=a_m, b_m=b_m, prec0m=prec0m,
-                      var_spike=var_spike, var_spike_vb=var_spike_vb,
+                      var_spike=var_spike,
                       a_chi=a_chi, b_chi=b_chi, alpha=alpha,
                       a_tau=a_tau, b_tau=b_tau, alpha_loc=alpha_loc)
   
