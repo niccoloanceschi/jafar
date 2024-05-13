@@ -11,6 +11,7 @@ library(truncnorm)
 library(Hmisc)
 library(stats)
 library(caret)
+library(Rcpp)
 # postprocessing
 library(infinitefactor)
 # plots
@@ -50,7 +51,7 @@ for(source_file in file_list){
 compiled_updates = F
 if(compiled_updates){
   source_dir = paste0(dirname(dirname(getSourceEditorContext()$path)),'/source')
-  Rcpp::sourceCpp(file.path(source_dir, 'JAFAR_D-CUSP_updates.cpp'))
+  sourceCpp(file.path(source_dir, 'JAFAR_D-CUSP_updates.cpp'))
 }
 ```
 
