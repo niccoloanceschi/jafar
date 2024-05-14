@@ -94,8 +94,10 @@ gibbs_JAFAR_CUSP <- function(y, X_m, n, M, p_m, binary_y=FALSE, seed=123,
   if(is.null(prec0m)){prec0m=rep(1,M)} else if(is.scalar(prec0m)){prec0m=rep(prec0m,M)}
   
   # hyperparams slab in response loadings variances
-  if(is.null(a_theta)){a_theta=0.5}
-  if(is.null(b_theta)){b_theta=0.1}
+  if(is.null(a_theta)){a_theta=0.6}
+  if(is.null(b_theta)){b_theta=0.2}
+  # if(is.null(a_theta)){a_theta=0.5}
+  # if(is.null(b_theta)){b_theta=0.1}
   
   # hyperparams spike in response-loadings variances
   if(is.null(var_spike_theta)){var_spike_theta=0.005}
@@ -109,8 +111,10 @@ gibbs_JAFAR_CUSP <- function(y, X_m, n, M, p_m, binary_y=FALSE, seed=123,
   if(is.null(var_spike)){var_spike=rep(0.005,M)} else if(is.scalar(var_spike)){var_spike=rep(var_spike,M)}
   
   # hyperparams slab in predictors-loadings variances
-  if(is.null(a_chi)){a_chi=rep(0.5,M)} else if(is.scalar(a_chi)){a_chi=rep(a_chi,M)}
-  if(is.null(b_chi)){b_chi=rep(0.1,M)} else if(is.scalar(b_chi)){b_chi=rep(b_chi,M)}
+  if(is.null(a_chi)){a_chi=rep(0.6,M)} else if(is.scalar(a_chi)){a_chi=rep(a_chi,M)}
+  if(is.null(b_chi)){b_chi=rep(0.2,M)} else if(is.scalar(b_chi)){b_chi=rep(b_chi,M)}
+  # if(is.null(a_chi)){a_chi=rep(0.5,M)} else if(is.scalar(a_chi)){a_chi=rep(a_chi,M)}
+  # if(is.null(b_chi)){b_chi=rep(0.1,M)} else if(is.scalar(b_chi)){b_chi=rep(b_chi,M)}
   
   # hyperparam beta dist stick breaking
   if(is.null(alpha)){alpha=rep(5,M)} else if(is.scalar(alpha)){alpha=rep(alpha,M)}
