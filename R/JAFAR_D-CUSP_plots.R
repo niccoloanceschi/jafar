@@ -2,6 +2,13 @@
 col_omics <- c('#332288','#882255','#CC6677','#8E021F','#648FFF','#785EF0','#8606D8','#DC267F')
 col_theta <- '#117733'
 
+#' Plot the of view-wise number of active shared factors throught the MCMC chain evolution
+#' 
+#' @param risMCMC Output of the Gibbs Sampler for JAFAR under the D-CUSP prior
+#' @param out_folder Directory where to save output
+#' 
+#' @export
+#' 
 plot_n_fact_shared <- function(risMCMC,out_folder='~/Desktop'){
   
   M <- length(risMCMC$Lambda_m)
@@ -25,6 +32,13 @@ plot_n_fact_shared <- function(risMCMC,out_folder='~/Desktop'){
   dev.off()
 }
 
+#' Plot the inferred number of view-specific factors throught the MCMC chain evolution
+#' 
+#' @param risMCMC Output of the Gibbs Sampler for JAFAR under the D-CUSP prior
+#' @param out_folder Directory where to save output
+#' 
+#' @export
+#' 
 plot_n_fact_specific <- function(risMCMC,out_folder='~/Desktop'){
 
   M <- length(risMCMC$Lambda_m)
@@ -48,6 +62,13 @@ plot_n_fact_specific <- function(risMCMC,out_folder='~/Desktop'){
   dev.off()
 }
 
+#' Plot the induced regression coefficients in the linear predictor of y|X=x
+#' 
+#' @param coef_jafar samples of the induced regression coefficients (output of \code{coeff_JAFAR})
+#' @param out_folder Directory where to save output
+#' 
+#' @export
+#' 
 plot_coeff_jafar <- function(coef_jafar,out_folder='~/Desktop'){
   
   M = length(coef_jafar)
@@ -69,6 +90,14 @@ plot_coeff_jafar <- function(coef_jafar,out_folder='~/Desktop'){
   dev.off()
 }
 
+#' Plot the empirical and inferred within-viewa correlation matrices
+#' 
+#' @param risMCMC Output of the Gibbs Sampler for JAFAR under the D-CUSP prior
+#' @param Z_m Train set multi-view predictors
+#' @param out_folder Directory where to save output
+#'
+#' @export
+#'
 plot_cor_jafar <- function(risMCMC,Z_m,out_folder='~/Desktop/'){
   
   M <- length(risMCMC$Cov_m_mean)
@@ -103,6 +132,13 @@ plot_cor_jafar <- function(risMCMC,Z_m,out_folder='~/Desktop/'){
   }
 }
 
+#' Plot the postprocessed shared-component loadings 
+#' 
+#' @param ris_PostProc Postprocessed shared component latent variables (output of \code{postprocess_JAFAR})
+#' @param out_folder Directory where to save output
+#'
+#' @export
+#'
 plot_loadings_jafar <- function(ris_PostProc,out_folder='~/Desktop/'){
   
   K0 <- ncol(ris_PostProc$Theta)
@@ -143,23 +179,43 @@ plot_loadings_jafar <- function(ris_PostProc,out_folder='~/Desktop/'){
   }
 }
 
-unif_jitter <- function(y_test,range=0.25){
-  n  = length(y_test)
-  n1 = sum(y_test)
+#' Deterministic jitter for plotting out-of-sample binary responses
+#' 
+#' @param vPred Predicted values
+#' @param range Jitter's range
+#'
+unif_jitter <- function(vPred,range=0.25){
+  n  = length(vPred)
+  n1 = sum(vPred)
   n0 = n-n1
   
   delta_0 = 2*range/max(n0,n1)
   
-  y_jitter <- y_test
-  y_jitter[y_test==0] <- seq(-delta_0*floor(n0/2-0.5),delta_0*floor(n0/2),by=delta_0)
-  y_jitter[y_test==1] <- 1+seq(-delta_0*floor(n1/2),delta_0*floor(n1/2-0.5),by=delta_0)
+  y_jitter <- vPred
+  y_jitter[vPred==0] <- seq(-delta_0*floor(n0/2-0.5),delta_0*floor(n0/2),by=delta_0)
+  y_jitter[vPred==1] <- 1+seq(-delta_0*floor(n1/2),delta_0*floor(n1/2-0.5),by=delta_0)
   
   y_jitter
 }
 
-
+#' Plot out-of-sample predictions of the response's linear predictors
+#' 
+#' @param vPred Predicted values
+#' @param yTrue True values
+#' @param s2y_inv MCMC samples of the response noise precision
+#' @param is_binary Is the response binary?
+#' @param out_folder Directory where to save output
+#' @param size Point size
+#' @param linewidth Linewidth of credible intervals bars
+#' @param width Width of credible intervals extrema
+#' @param alpha Opacity of credible intervals bars
+#' @param range Jitter's range for binary response
+#' @param filename Custom file name (optional)
+#'
+#' @export
+#' 
 plot_pred_jafar <- function(vPred,yTrue,s2y_inv=NULL,is_binary=F,out_folder='~/Desktop/',
-                                  size=0.7,linewidth=0.5,width=0.7,alpha=0.4,range=0.25,title=NULL){
+                                  size=0.7,linewidth=0.5,width=0.7,alpha=0.4,range=0.25,filename=NULL){
   
   ref_size=size
   
@@ -211,9 +267,9 @@ plot_pred_jafar <- function(vPred,yTrue,s2y_inv=NULL,is_binary=F,out_folder='~/D
                       width = ref_size, color = "black",alpha=0.8)
   }
   
-  filename = paste0('jafar_y_pred.pdf')
-    if(!is.null(title)){filename=paste0('jafar_y_pred_',title,'.pdf')}
-  ggsave(file.path(out_folder,filename), combined_plot, height=5*0.8, width=5)
+  outfile = paste0('jafar_y_pred.pdf')
+    if(!is.null(filename)){outfile=paste0('jafar_y_pred_',filename,'.pdf')}
+  ggsave(file.path(out_folder,outfile), combined_plot, height=5*0.8, width=5)
 }
 
 

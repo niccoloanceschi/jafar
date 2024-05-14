@@ -1,4 +1,12 @@
 
+#' Multi-view varimax routine
+#' 
+#' @param lambda One single sample of the concatenate shared-loadings
+#' @param p_views Number of features per view
+#' @param normalize Normalization of loading columns (varimax internal parameter)
+#' @param eps Threshold on trace
+#' @param maxIter Maximum number of iterations
+#'
 multivew_varimax <- function(L, p_views, normalize = FALSE, eps = 1e-05, maxIter=1e3) {
   
   M <- length(p_views)
@@ -44,6 +52,14 @@ multivew_varimax <- function(L, p_views, normalize = FALSE, eps = 1e-05, maxIter
   list(loadings = LR, rotmat = R, dQ=dQ[2:i])
 }
 
+#' Multi-view MatchAlign routine
+#' 
+#' @param lambda MCMC samples of the concatenate shared-loadings
+#' @param theta MCMC samples of the shared latent factors
+#' @param risMCMC MCMC samples of the response loadings
+#' @param p_views Number of features per view
+#' @param normalize Normalization of loading columns (varimax internal parameter)
+#'
 multiview_MatchAlign = function(lambda, eta, theta, p_views, normalize=F){
   
   nMCMC <- length(lambda)
@@ -85,6 +101,14 @@ multiview_MatchAlign = function(lambda, eta, theta, p_views, normalize=F){
   return(list(lambda = lamout, eta = etaout, Theta=thetaout))
 }
 
+#' Postprocessing of shared-component latent variable via multi-view MatchAlign 
+#' 
+#' @param risMCMC Output of the Gibbs Sampler for JAFAR under the D-CUSP prior
+#' @param normalize_col Normalization of loading columns (varimax internal parameter)
+#' @param nBurnIn Number of (extra) MCMC iterations to skip
+#'
+#' @export
+#'
 postprocess_JAFAR <- function(risMCMC,normalize_col=F,nBurnIn=0){
   
   M <- length(risMCMC$Lambda_m)

@@ -1,18 +1,20 @@
 
-# # INPUTS:
-# #   n: integer
-# #   p_m: integer
-# #   K: integer
-# #   K_Gm: integer
-# #   X_m: real matrix (n x p_m)
-# #   mu_m: real vector (p_m)
-# #   s2_inv_m: real vector (p_m)
-# #   eta: real matrix (n x K)
-# #   phi_m: real matrix (n x K_Gm)
-# #   chi_m: real vector (K)
-# #   tau_m: real vector (K_Gm)
-# #   facTfac: real matrix ((K+K_Gm) x (K+K_Gm))
-
+#' Update of view-wise loadings within the Gibbs sampler for JAFAR under the D-CUSP prior
+#'
+#' @param n Number of observations (integer)
+#' @param p_m Dimension of the considered view (integer)
+#' @param K Number of shared factors
+#' @param K_Gm Number of view-specific factors
+#' @param X_m Observed predictors in the considered view (real matrix: n x p_m)
+#' @param facTfac: t-crossp-roduct of overall factors (real matrix: (K+K_Gm) x (K+K_Gm))
+#' @param eta Shared latent factors (real matrix: n x K)
+#' @param phi_m View-specific latent factors (real matrix: n x K_Gm)
+#' @param mu_m: Intercepts (real vector: p_m)
+#' @param s2_inv_m: Idiosyncrstic components precision (real positive vector: p_m)
+#' @param chi_m Shared-loadings prior variances (real positive vector: K)
+#' @param tau_m View-specific loadings prior variances (real positive vector :K_Gm)
+#' @return Updated loadings
+#' 
 update_loadings <- function(n, p_m, K, K_Gm, 
                             X_m, facTfac, eta,  phi_m,
                             mu_m, s2_inv_m, chi_m, tau_m){

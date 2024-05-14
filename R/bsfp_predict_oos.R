@@ -1,5 +1,8 @@
 
-# Original function `data.rearrange` from the GitHub repo BSFP
+#' Original function `data.rearrange` from the GitHub repo BSFP
+#'
+#' @author Jun Young Park (2020)
+#' 
 data.rearrange=function(data,rmt=F,sigma=NULL){
   out=NULL
   p=nrow(data)
@@ -29,6 +32,35 @@ data.rearrange=function(data,rmt=F,sigma=NULL){
 }
 
 # Modified version of the function `bsfp.predict` from the GitHub repo BSFP for coherent out-of-sample predictions
+#'
+#' @param bsfp.fit Results from fitting \code{bsfp} on training data.
+#' @param test_data Matrix-list dataset of held-out test data.
+#' @param Y_test Column vector with outcome on test samples or \code{NULL}
+#' @param model_params May be \code{NULL} if \code{model_params=NULL} in \code{bsfp} fit.
+#' Otherwise, specify as \code{(error_vars, joint_vars, indiv_vars, beta_vars, response_vars)}.
+#' @param nsample Integer specifing number of Gibbs sampling iterations
+#' @param progress Boolean determining if progress of the sampler be displayed
+#' @param starting_values List of starting values for \eqn{\mathbf{V}, \mathbf{U}_s, \mathbf{W}_s, \mathbf{V}_s} for \eqn{s=1,\dots, q}.
+#' If \code{NULL}, initialize from prior.
+#'
+#' @details Generate new scores for held-out test data based on a
+#' training fit of BSFP. Uses the estimated ranks and joint and individual loadings. Cannot
+#' be used if missing values are present in test data.
+#'
+#' @return Returns a list with the following parameters:
+#' \item{test_data}{Test data provided by user}
+#' \item{EY.draw}{List of posterior samples for the E(Y|X), i.e. \eqn{\beta_0 + \mathbf{V}\boldsymbol{\beta}_{joint} + \sum_{s=1}^q \mathbf{V}_s \boldsymbol{\beta}_s} for each Gibbs sampling iteration.}
+#' \item{V.draw}{List of posterior samples for joint scores, \eqn{\mathbf{V}}}
+#' \item{U.train}{List of posterior samples for joint loadings for each source, \eqn{\mathbf{U}_s} for \eqn{s=1,\dots,q} given by the training BSFP fit}
+#' \item{W.train}{List of posterior samples for individual loadings for each source,  \eqn{\mathbf{W}_s} for \eqn{s=1,\dots,q} given by the training BSFP fit}
+#' \item{Vs.draw}{List of posterior samples for individual scores for each source, \eqn{\mathbf{V}_s} for \eqn{s=1,\dots,q}}
+#' \item{ranks}{Vector with the estimated joint and individual ranks. \code{ranks[1]} is the estimated joint rank. \code{ranks[2:(q+1)]} correspond to the individual ranks for each source.}
+#' \item{tau2.train}{List of posterior samples for the response variance if the response was continuous given by training BSFP fit}
+#' \item{beta.train}{List of posterior samples for the regression coefficients used in the predictive model given by training BSFP fit}
+#' \item{Xm.draw}{List of posterior samples for missing predictors imputations}
+#' 
+#' @export
+#' 
 bsfp.predict.oos <- function(bsfp.fit, test_data, response_type='continuous', model_params = NULL, nsample, progress = TRUE, starting_values = NULL) {
   
   # -------------------------------------------------------------------------- #

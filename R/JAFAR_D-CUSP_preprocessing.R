@@ -1,6 +1,16 @@
 
-# Missing Data Identification ----
+#' Check in any given variable is a scalar 
+#' 
+#' @param x input variable
+#' @return Boolean value
+#' 
+is.scalar <- function(x) is.atomic(x) && length(x) == 1L
 
+#' Identification of missing entries in multi-view predictors
+#' 
+#' @param X_m Multi-view predictors
+#' @return View-wise list if indices of meassing features
+#'
 get_NA_X <- function(X_m){
   
   M <- length(X_m)
@@ -26,14 +36,20 @@ get_NA_X <- function(X_m){
   return(list(na_row_idx=na_row_idx,na_idx=na_idx))  
 }
 
-# Copula Functions ----
-
+#' Empirical cdf transform
+#' 
+#' @param x Predictor values
+#'
 order_index = function(x){
   ind = sort(x, index.return = T)$ix
   x[ind] = (1:length(x))/(length(x)+1)
   return(x)
 }
 
+#' Empirical cdf transform with missing data
+#' 
+#' @param x Predictor values
+#'
 order_index_na = function(x){
   x_na = is.na(x)
   x[x_na == F] = order_index(x[x_na == F])
@@ -41,6 +57,11 @@ order_index_na = function(x){
   return(x*n/(n+1))
 }
 
+#' Point-wise evaluation empirical cdf function
+#' 
+#' @param xNew location at which the cdf function is to be evaluated
+#' @param xTrain data to construct the empirical cdf
+#'
 F_hat <- function(xNew,xTrain){
   x_obs <- xTrain[!is.na(xTrain)]
   n = length(x_obs)
@@ -50,6 +71,11 @@ F_hat <- function(xNew,xTrain){
   sapply(xNew,function(x) max(values[knots<=x]))
 }
 
+#' Point-wise evaluation empirical quantile function
+#' 
+#' @param pNew probability at which the quantile function is to be evaluated
+#' @param xTrain data to construct the empirical cdf
+#'
 Q_hat <- function(pNew,xTrain) {
   x_obs <- xTrain[!is.na(xTrain)]
   n <- length(x_obs)
@@ -59,6 +85,10 @@ Q_hat <- function(pNew,xTrain) {
   knots[sapply(pNew, function(p) sum(p > values) + 1)]
 }
 
+#' Smoothed version of the empirical cdf
+#' 
+#' @param vec Predictor values
+#'
 get_F_smooth <- function(vec){
   vec <- vec[!is.na(vec)]
   x_range  <- c(-100,sort(vec),100)
@@ -68,6 +98,10 @@ get_F_smooth <- function(vec){
   return(F_spline)
 }
 
+#' Smoothed version of the quantile cdf
+#' 
+#' @param vec Predictor values
+#'
 get_Q_smooth <- function(vec){
   vec <- vec[!is.na(vec)]
   x_range  <- c(0,sort(order_index(vec)),1)
@@ -76,6 +110,13 @@ get_Q_smooth <- function(vec){
   return(Q_spline)
 }
 
+#' apply cdf transform to multi-view predictors
+#' 
+#' @param Z_m Train set predictors
+#' @param Z_m_test Test set predictors
+#' @param smoothed Use smoothed cdf
+#' @return List of transformed features
+#'
 cdf_transform <- function(Z_m,Z_m_test=NULL,smoothed=F){
   p_m <- sapply(Z_m,ncol)
   for(m in 1:length(Z_m)){
@@ -98,6 +139,16 @@ cdf_transform <- function(Z_m,Z_m_test=NULL,smoothed=F){
   return(output)
 }
 
+#' JAFAR multi-view predictors preprocess: cdf transform + center & rescale
+#' 
+#' @param Z_m Train set predictors
+#' @param Z_m_test Test set predictors
+#' @param copula Apply cdf transformation
+#' @param smoothed Use smoothed cdf
+#' @return List of preprocessed features and rescaling factors
+#'
+#' @export
+#' 
 jafar_preprocess_X <- function(Z_m,Z_m_test=NULL,copula=F,smoothed=F){
   
   preprocess_X_m <- list()
@@ -155,6 +206,14 @@ jafar_preprocess_X <- function(Z_m,Z_m_test=NULL,copula=F,smoothed=F){
   return(output)
 }
 
+#' JAFAR response preprocess: center & rescale
+#' 
+#' @param yTrain Train set responses
+#' @param yTest Test set responses
+#' @return List of preprocessed responses and rescaling factors
+#' 
+#' @export
+#' 
 jafar_preprocess_y <- function(yTrain,yTest=NULL){
   
   yTrain <- as.matrix(yTrain,ncol=1)

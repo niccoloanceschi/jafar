@@ -1,26 +1,63 @@
 
-is.scalar <- function(x) is.atomic(x) && length(x) == 1L
-
-gibbs_JAFAR_CUSP <- function(y, X_m, n, M, p_m,                     # input data
-                             nBurnIn=5000, nMCMC=2500, nThin=10,    # MCMC params
-                             Kmax=NULL, Kmax_m=NULL,                # latent dim bounds
-                             K0=NULL, K0_m=NULL,                    # initial number of factors
-                             prec0=NULL, prec0m=NULL,               # intercept prior precisions
-                             a_m=NULL, b_m=NULL,                    # idiosyncratic noises in predictors
-                             a_sig=NULL, b_sig=NULL,                # response noise in response
-                             a_theta=NULL, b_theta=NULL,            # slab in response loadings variances
-                             a_chi=NULL, b_chi=NULL,                # slab in 'shared' loadings variances
-                             a_tau=NULL, b_tau=NULL,                # slab in 'specific' loadings variances
-                             var_spike_theta=NULL,                  # spike value in response loadings variances
-                             a_xi=NULL, b_xi=NULL,                  # mixture weight in response loadings variances
-                             var_spike=NULL,                        # spike value in loadings variances
-                             alpha=NULL, alpha_loc=NULL,            # stick breaking params
-                             t0=-1, t1=-5e-4, t0_adapt=20,          # adaptation
-                             get_latent_vars=TRUE,                  # output loadings & latent factor
-                             rescale_pred=FALSE,                    # rescale to cor in imputing NAs
-                             get_last_sample=FALSE,                 # output full last sample
-                             binary_y=FALSE,                        # is the response binary or continuous?
-                             seed=123
+#' Run Gibbs Sampler for JAFAR under the D-CUSP prior
+#'
+#' @param y vector of responses (length n)
+#' @param X_m list of M multi-view predictors (the m-th elment if a matrix of dim. n x p_m[m])
+#' @param n number of observations
+#' @param M number of views
+#' @param p_m views dimensions (length M)
+#' @param binary_y Is the response binary?
+#' @param seed See for random number generation
+#' @param nMCMC Number of total MCMC iterations
+#' @param nBurnIn Number of burn-in iterations
+#' @param nThin Thinning of MCMC iterations
+#' @param Kmax Maximum number of latent factors in shared components
+#' @param Kmax_m Maximum number of latent factors in view-specific components (length M)
+#' @param K0 Initial number of latent factors in shared components
+#' @param K0_m Initial number of latent factors in view-specific components (length M)
+#' @param prec0 Prior precision for response intercept
+#' @param prec0m Prior precisions for predictors intercepts
+#' @param a_m Shape parameters of inverse-gamma prior on predictors idiosyncratic components
+#' @param b_m Scale parameters of inverse-gamma prior on predictors idiosyncratic components
+#' @param a_sig Shape parameter of inverse-gamma prior on response noise
+#' @param b_sig Scale parameter of inverse-gamma prior on response noise
+#' @param a_theta Shape parameter in slab element of prior for response loadings
+#' @param b_theta Scale parameter in slab element of prior for response loadings
+#' @param a_chi Shape parameters in slab element of prior fo shared-component loadings
+#' @param b_chi Scale parameters in slab element of prior for shared-component loadings
+#' @param var_spike_theta Variance parameter in spike element of prior for response-loadings
+#' @param a_xi Shape1 parameters in beta of prior on response-loadings spike and slab weights
+#' @param b_xi Shape2 parameters in beta of prior on response-loadings spike and slab weights
+#' @param var_spike Variance parameter in spike element of prior for predictors-loadings
+#' @param alpha Stick-breaking parameter in shared-component loadings
+#' @param alpha_loc Stick-breaking parameter in view-specific loadings
+#' @param t0 Intercept in MCMC adaptation
+#' @param t1 Slope in MCMC adaptation
+#' @param t0_adapt Off-set of MCMC adaptation
+#' @param get_latent_vars Include in output of latent variables form factor model
+#' @param rescale_pred Rescale loadings to induce correlation matrix in inputing missing values
+#' @param get_last_sample Include in output the last sample
+#' @return A list of output from the MCMC chain 
+#'
+#' @export
+#'
+gibbs_JAFAR_CUSP <- function(y, X_m, n, M, p_m, binary_y=FALSE, seed=123,                      
+                             nMCMC=2500, nBurnIn=5000, nThin=10,    
+                             Kmax=NULL, Kmax_m=NULL,                
+                             K0=NULL, K0_m=NULL,                    
+                             prec0=NULL, prec0m=NULL,               
+                             a_m=NULL, b_m=NULL,                    
+                             a_sig=NULL, b_sig=NULL,              
+                             a_theta=NULL, b_theta=NULL,            
+                             a_chi=NULL, b_chi=NULL,                
+                             var_spike_theta=NULL,                  
+                             a_xi=NULL, b_xi=NULL,                  
+                             var_spike=NULL,                        
+                             alpha=NULL, alpha_loc=NULL,            
+                             t0=-1, t1=-5e-4, t0_adapt=20,          
+                             get_latent_vars=TRUE,                  
+                             rescale_pred=FALSE,                    
+                             get_last_sample=FALSE
                              ){
   
   set.seed(seed)
@@ -60,10 +97,10 @@ gibbs_JAFAR_CUSP <- function(y, X_m, n, M, p_m,                     # input data
   if(is.null(a_theta)){a_theta=0.5}
   if(is.null(b_theta)){b_theta=0.1}
   
-  # hyperparams spike in response loadings variances
+  # hyperparams spike in response-loadings variances
   if(is.null(var_spike_theta)){var_spike_theta=0.005}
   
-  # hyperparams mixture weight in response loadings variances
+  # hyperparams mixture weight in response-loadings variances
   if(is.null(a_xi)){a_xi=3}
   if(is.null(b_xi)){b_xi=2}
   
@@ -71,13 +108,9 @@ gibbs_JAFAR_CUSP <- function(y, X_m, n, M, p_m,                     # input data
   if(is.null(var_spike)){var_spike=rep(0.005,M)} else if(is.scalar(var_spike)){var_spike=rep(var_spike,M)}
   if(is.null(var_spike)){var_spike=rep(0.005,M)} else if(is.scalar(var_spike)){var_spike=rep(var_spike,M)}
   
-  # hyperparams slab in 'shared' loadings variances
+  # hyperparams slab in predictors-loadings variances
   if(is.null(a_chi)){a_chi=rep(0.5,M)} else if(is.scalar(a_chi)){a_chi=rep(a_chi,M)}
   if(is.null(b_chi)){b_chi=rep(0.1,M)} else if(is.scalar(b_chi)){b_chi=rep(b_chi,M)}
-  
-  # hyperparams slab in 'specific' loadings variances
-  if(is.null(a_tau)){a_tau=rep(0.5,M)} else if(is.scalar(a_tau)){a_tau=rep(a_tau,M)}
-  if(is.null(b_tau)){b_tau=rep(0.1,M)} else if(is.scalar(b_tau)){b_tau=rep(b_tau,M)}
   
   # hyperparam beta dist stick breaking
   if(is.null(alpha)){alpha=rep(5,M)} else if(is.scalar(alpha)){alpha=rep(alpha,M)}
@@ -164,18 +197,17 @@ gibbs_JAFAR_CUSP <- function(y, X_m, n, M, p_m,                     # input data
   
   # ------ Initialization ------------------------------------------------------
   
-  par_init <- gibbs_JAFAR_CUSP_init(y, X_m, n, M, p_m,          # input data
-                                    K0, K0_m,                   # initial number of factors
-                                    a_sig, b_sig,               # response noise
-                                    a_theta, b_theta,           # slab in response loadings variances
-                                    var_spike_theta,            # spike value in response loadings variances
-                                    a_xi, b_xi,                 # mixture weight in response loadings variances
-                                    a_m, b_m,                   # idiosyncratic noises
-                                    prec0, prec0m,              # intercepts
-                                    var_spike,                  # spike value in loadings variances
-                                    a_chi, b_chi,               # slab in 'shared' loadings variances
-                                    a_tau, b_tau,               # slab in 'specific' loadings variances
-                                    alpha, alpha_loc,           # beta dist stick breaking
+  par_init <- gibbs_JAFAR_CUSP_init(n, M, p_m,          
+                                    K0, K0_m,                   
+                                    a_sig, b_sig,               
+                                    a_theta, b_theta,           
+                                    var_spike_theta,            
+                                    a_xi, b_xi,                 
+                                    a_m, b_m,                  
+                                    prec0, prec0m,              
+                                    var_spike,                  
+                                    a_chi, b_chi,               
+                                    alpha, alpha_loc,       
                                     seed)
   
   get_env = environment()
@@ -445,8 +477,8 @@ gibbs_JAFAR_CUSP <- function(y, X_m, n, M, p_m,                     # input data
         # efficient computation of multivariate Normal & Student-T (log)-pdf
         vec_G  <- colSums(Gamma_m[[m]][,1:K_Gm[m],drop=F]^2)
         lonP_N <- matrix( -0.5*vec_G/var_spike[m] - rep(0.5*p_m[m]*log(2*pi*var_spike[m]),K_Gm[m]) ,K_Gm[m],K_Gm[m]) 
-        logP_T <- matrix( -(0.5*p_m[m]+a_tau[m])*log(1+0.5*vec_G/b_tau[m]) +
-                            rep(lgamma(0.5*p_m[m]+a_tau[m]) - lgamma(a_tau[m]) - 0.5*p_m[m]*log(2*pi*b_tau[m]),K_Gm[m]) ,K_Gm[m],K_Gm[m])
+        logP_T <- matrix( -(0.5*p_m[m]+a_chi[m])*log(1+0.5*vec_G/b_chi[m]) +
+                            rep(lgamma(0.5*p_m[m]+a_chi[m]) - lgamma(a_chi[m]) - 0.5*p_m[m]*log(2*pi*b_chi[m]),K_Gm[m]) ,K_Gm[m],K_Gm[m])
         
         # un-normalized (log)-probability matrix
         lonP_Z <- lonP_N
@@ -524,8 +556,8 @@ gibbs_JAFAR_CUSP <- function(y, X_m, n, M, p_m,                     # input data
       tau_m[[m]] <- rep(1./var_spike[m],K_Gm[m])
       if(length(active_G[[m]])>0){
         
-        tau_m[[m]][active_G[[m]]] <- rgamma(length(active_G[[m]]),shape=a_tau[m]+0.5*p_m[m],rate=1) *
-          1./(b_tau[m] + 0.5 * colSums(Gamma_m[[m]][,active_G[[m]],drop=F]^2))
+        tau_m[[m]][active_G[[m]]] <- rgamma(length(active_G[[m]]),shape=a_chi[m]+0.5*p_m[m],rate=1) *
+          1./(b_chi[m] + 0.5 * colSums(Gamma_m[[m]][,active_G[[m]],drop=F]^2))
       }
     }
     
@@ -686,7 +718,7 @@ gibbs_JAFAR_CUSP <- function(y, X_m, n, M, p_m,                     # input data
                       a_m=a_m, b_m=b_m, prec0m=prec0m,
                       var_spike=var_spike,
                       a_chi=a_chi, b_chi=b_chi, alpha=alpha,
-                      a_tau=a_tau, b_tau=b_tau, alpha_loc=alpha_loc)
+                      alpha_loc=alpha_loc)
   
   output = list(K=K_MC,K_T_eff=K_T_eff_MC,K_Lm_eff=K_Lm_eff_MC,
                 K_Gm=K_Gm_MC,K_Gm_eff=K_Gm_eff_MC,

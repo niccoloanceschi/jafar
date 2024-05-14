@@ -1,19 +1,42 @@
 
-gibbs_JAFAR_CUSP_init <- function(y, X_m, n, M, p_m,          # input data
-                                  K0, K0_m,                   # initial number of factors
-                                  a_sig, b_sig,               # response noise
-                                  a_theta, b_theta,           # slab in response loadings variances
-                                  var_spike_theta,            # spike value in response loadings variances
-                                  a_xi, b_xi,                 # mixture weight in response loadings variances
-                                  a_m, b_m,                   # idiosyncratic noises
-                                  prec0, prec0m,              # "local" means
-                                  var_spike,                  # spike value in loadings variances
-                                  a_chi, b_chi,               # slab in 'shared' loadings variances
-                                  a_tau, b_tau,               # slab in 'local' loadings variances
-                                  alpha, alpha_loc,           # beta dist stick breaking
+#' Initialize all unknown/latent random variables in the Gibbs sampler for JAFAR under the D-CUSP prior
+#'
+#' @param n number of observations
+#' @param M number of views
+#' @param p_m views dimensions (length M)
+#' @param K0 Initial number of latent factors in shared components
+#' @param K0_m Initial number of latent factors in view-specific components (length M)
+#' @param a_sig Shape parameter of inverse-gamma prior on response noise
+#' @param b_sig Scale parameter of inverse-gamma prior on response noise
+#' @param a_theta Shape parameter in slab element of prior for response loadings
+#' @param b_theta Scale parameter in slab element of prior for response loadings
+#' @param var_spike_theta Variance parameter in spike element of prior for response-loadings
+#' @param a_xi Shape1 parameters in beta of prior on response-loadings spike and slab weights
+#' @param b_xi Shape2 parameters in beta of prior on response-loadings spike and slab weights
+#' @param a_m Shape parameters of inverse-gamma prior on predictors idiosyncratic components
+#' @param b_m Scale parameters of inverse-gamma prior on predictors idiosyncratic components
+#' @param prec0 Prior precision for response intercept
+#' @param prec0m Prior precisions for predictors intercepts
+#' @param var_spike Variance parameter in spike element of prior for predictors-loadings
+#' @param a_chi Shape parameters in slab element of prior fo shared-component loadings
+#' @param b_chi Scale parameters in slab element of prior for shared-component loadings
+#' @param alpha Stick-breaking parameter in shared-component loadings
+#' @param alpha_loc Stick-breaking parameter in view-specific loadings
+#' @param seed See for random number generation
+#' @return A list of initial values for all unknown/latent random variables in the Gibbs sampler for JAFAR under the D-CUSP prior
+#'
+gibbs_JAFAR_CUSP_init <- function(n, M, p_m,          
+                                  K0, K0_m,                   
+                                  a_sig, b_sig,               
+                                  a_theta, b_theta,           
+                                  var_spike_theta,            
+                                  a_xi, b_xi,                 
+                                  a_m, b_m,                  
+                                  prec0, prec0m,              
+                                  var_spike,                  
+                                  a_chi, b_chi,               
+                                  alpha, alpha_loc,       
                                   seed) {
-  
-  # random initialization ----
   
   param_init <- within(list(), {
       

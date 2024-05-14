@@ -1,6 +1,19 @@
 
-# Induced Regression Coefficients ----
-
+#' Compute the induced regression coefficients in the linear predictor of y|X=x for a single MCMC iteration
+#'
+#' @param M number of views
+#' @param K Number of latent factors in shared components
+#' @param K Number of latent factors in view-specific components (length M)
+#' @param p_m views dimensions (length M)
+#' @param Theta Response loadings 
+#' @param s2_inv_y Response noise precision
+#' @param Theta Response loadings s2_inv_y
+#' @param Lambda_m Shared-component loadings
+#' @param Gamma_m View-specific loadings
+#' @param s2_inv_m Precisions of idiosyncratic components in multi-view features
+#' @param rescale_pred Rescale loadings to induce correlation matrix 
+#' @return A list with the values of regression coefficients for each view in the linear predictor of y|X=x for a single MCMC iteration
+#'
 get_coeff_JAFAR <- function(M,K,K_m,p_m,Theta,s2_inv_y,Lambda_m,Gamma_m,s2_inv_m,rescale_pred=FALSE){
   beta_m <- list()
   C_inv <- diag(1,K,K)
@@ -35,6 +48,14 @@ get_coeff_JAFAR <- function(M,K,K_m,p_m,Theta,s2_inv_y,Lambda_m,Gamma_m,s2_inv_m
   return(list(pred_coeff_m=beta_m, pred_var=var_y))
 }
 
+#' Compute the induced regression coefficients in the linear predictor of y|X=x for all MCMC iteration
+#'
+#' @param risMCMC Output of the Gibbs Sampler for JAFAR under the D-CUSP prior
+#' @param rescale_pred Rescale loadings to induce correlation matrix 
+#' @return A list with the values of regression coefficients for each view in the linear predictor of y|X=x for all MCMC iteration
+#' 
+#' @export
+#' 
 coeff_JAFAR <- function(risMCMC,rescale_pred=FALSE){
   
   M = length(risMCMC$mu_m)
@@ -74,12 +95,27 @@ coeff_JAFAR <- function(risMCMC,rescale_pred=FALSE){
   
 }
 
-# Prediction of Linear Predictor via Sampling of Latent Factors ----
-
-
+#' Compute the linear predictor of y|X=x in out-of-sample observations for a single MCMC iteration via sampling of the latent factors
+#'
+#' @param Xpred Multi-view features in out-of-sample observations
+#' @param nPred Number of out-of-sample observations
+#' @param M number of views
+#' @param p_m views dimensions (length M)
+#' @param K Number of latent factors in shared components
+#' @param K_m Number of latent factors in view-specific components (length M)
+#' @param Theta Response loadings 
+#' @param Lambda_m Shared-component loadings
+#' @param Gamma_m View-specific loadings
+#' @param mu_y Response Intercepts
+#' @param s2_inv_y Response noise precision
+#' @param mu_m Intercepts of idiosyncratic components in multi-view features
+#' @param s2_inv_m Precisions of idiosyncratic components in multi-view features
+#' @param rescale_pred Rescale loadings to induce correlation matrix 
+#' @return The values of linear predictor of y|X=x in out-of-sample observations for a single MCMC iteration
+#'
 y_cond_pred_JAFAR_sampling <- function(Xpred,nPred,M,p_m,K,K_m,
                                        Theta,Lambda_m,Gamma_m,mu_y,s2_inv_y,mu_m,s2_inv_m,
-                                       rescale_pred=rescale_pred){
+                                       rescale_pred=FALSE){
   
   Q_eta <- diag(1,K,K)
   r_eta <- rep(0,K)
@@ -124,13 +160,31 @@ y_cond_pred_JAFAR_sampling <- function(Xpred,nPred,M,p_m,K,K_m,
 }
 
 
-# Linear Predictor via Exact Expression with missing data in features -----
-
+#' Compute the linear predictor of y|X=x in out-of-sample observations for a single MCMC iteration via Exact Expression & with missing data in features
+#'
+#' @param Xpred Multi-view features in out-of-sample observations
+#' @param nPred Number of out-of-sample observations
+#' @param M number of views
+#' @param p_m views dimensions (length M)
+#' @param K Number of latent factors in shared components
+#' @param K_m Number of latent factors in view-specific components (length M)
+#' @param Theta Response loadings 
+#' @param Lambda_m Shared-component loadings
+#' @param Gamma_m View-specific loadings
+#' @param mu_y Response Intercepts
+#' @param s2_inv_y Response noise precision
+#' @param mu_m Intercepts of idiosyncratic components in multi-view features
+#' @param s2_inv_m Precisions of idiosyncratic components in multi-view features
+#' @param na_row_idx view-wise list of observations with missing entries
+#' @param na_idx view-wise list of missing feature in each observations
+#' @param rescale_pred Rescale loadings to induce correlation matrix 
+#' @return The values of linear predictor of y|X=x in out-of-sample observations for a single MCMC iteration
+#'
 y_cond_pred_JAFAR_NA <- function(Xpred,nPred,M,p_m,K,K_m,
                                  Theta,Lambda_m,Gamma_m,
                                  mu_y,s2_inv_y,mu_m,s2_inv_m,
                                  na_row_idx,na_idx,
-                                 rescale_pred=rescale_pred){
+                                 rescale_pred=FALSE){
   
   lin_pred_y <- rep(mu_y,nPred)
   
@@ -217,8 +271,15 @@ y_cond_pred_JAFAR_NA <- function(Xpred,nPred,M,p_m,K,K_m,
   return(lin_pred_y)
 }
 
-# Inferred Linear Predictor for out-of-sample observations -----
-
+#' Compute the linear predictor of y|X=x in out-of-sample observations for all MCMC iteration
+#'
+#' @param Xpred Multi-view features in out-of-sample observations
+#' @param risMCMC Output of the Gibbs Sampler for JAFAR under the D-CUSP prior
+#' @param rescale_pred Rescale loadings to induce correlation matrix 
+#' @return Linear predictors of y|X=x in out-of-sample observations for all MCMC iteration
+#' 
+#' @export
+#' 
 y_pred_JAFAR <- function(Xpred,risMCMC,rescale_pred=FALSE){
   
   M = length(Xpred)

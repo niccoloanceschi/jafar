@@ -160,11 +160,11 @@ plot_n_fact_specific(ris_MCMC,out_folder=output_dir)
 plot_cor_jafar(ris_MCMC,Z_m, out_folder=output_dir)
 ```
 
-## Plot Response 
+## Plot Response Predictions
 
 ```{r}
-plot_pred_jafar(y_train_pred,yTrain,s2y_inv=ris_MCMC$s2_inv,is_binary=binary_y,out_folder=output_dir,title='Train')
-plot_pred_jafar(y_test_pred,yTest,s2y_inv=ris_MCMC$s2_inv,is_binary=binary_y,out_folder=output_dir,title='Test')
+plot_pred_jafar(y_train_pred,yTrain,s2y_inv=ris_MCMC$s2_inv,is_binary=binary_y,out_folder=output_dir,filename='Train')
+plot_pred_jafar(y_test_pred,yTest,s2y_inv=ris_MCMC$s2_inv,is_binary=binary_y,out_folder=output_dir,filename='Test')
 ```
 
 ## Plot Coefficients
