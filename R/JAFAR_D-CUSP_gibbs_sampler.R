@@ -186,17 +186,19 @@ gibbs_JAFAR_CUSP <- function(y, X_m, n, M, p_m, binary_y=FALSE, seed=123,
     # Containers for output of imputed NA values
     na_idx     <- lapply(Xm_na, function(df) apply(df,1,which))
     na_row_idx <- lapply(na_idx,function(ll) c(1:n)[sapply(ll,length)>0])
-    na_idx     <- lapply(1:M, function(m) na_idx[[m]][na_row_idx[[m]]])
-    Xm_MC      <- lapply(na_idx, function(ll) lapply(ll, function(vec) matrix(NA,nEff,length(vec))))
+    na_idx     <- lapply(1:M, function(m) na_idx[[m]][as.vector(na_row_idx[[m]])])
+    Xm_MC      <- lapply(1:M, function(m)
+      if(length(na_row_idx[[m]])>0){lapply(1:length(na_row_idx[[m]]), function(idx) matrix(NA,nEff,length(na_idx[[m]][[idx]])))})
     
     # Initial imputation from medians
     for(m in 1:M){
       Xm_medians <- apply(X_m[[m]],2,median,na.rm=T)
-      for(idx in 1:length(na_idx[[m]])){
-        X_m[[m]][na_row_idx[[m]][idx],unlist(na_idx[[m]][idx])] <- Xm_medians[unlist(na_idx[[m]][idx])]
+      if(length(na_row_idx[[m]])>0){
+        for(idx in 1:length(na_idx[[m]])){
+          X_m[[m]][na_row_idx[[m]][idx],na_idx[[m]][[idx]]] <- Xm_medians[na_idx[[m]][[idx]]]
+        }
       }
     }
-    
   }
   
   # ------ Initialization ------------------------------------------------------
@@ -694,8 +696,10 @@ gibbs_JAFAR_CUSP <- function(y, X_m, n, M, p_m, binary_y=FALSE, seed=123,
       
       if(NA_in_X){
         for(m in 1:M){
-          for(idx in 1:length(na_idx[[m]])){
-            Xm_MC[[m]][[idx]][teff,] <- X_m[[m]][na_row_idx[[m]][idx],unlist(na_idx[[m]][idx])]
+          if(length(na_row_idx[[m]])>0){
+            for(idx in 1:length(na_row_idx[[m]])){
+              Xm_MC[[m]][[idx]][teff,] <- X_m[[m]][na_row_idx[[m]][idx],na_idx[[m]][[idx]]]
+            }
           }
         }
       }
