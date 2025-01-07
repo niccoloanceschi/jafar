@@ -115,8 +115,8 @@ Kmax_m = rep(20,M)
 # Run Gibbs Sampler
 
 ```{r}
-ris_MCMC <- gibbs_JAFAR_CUSP(yTrain, Z_m, n, M, p_m,
-                             nBurnIn, nMCMC, nThin, seed = mcmc_seed,
+ris_MCMC <- gibbs_JAFAR_CUSP(yTrain, Z_m, n, M, p_m, seed = mcmc_seed,
+                             nMCMC=nMCMC, nBurnIn=nBurnIn, nThin=nThin, 
                              Kmax=Kmax, Kmax_m=Kmax_m,binary_y=binary_y) 
 ```
 

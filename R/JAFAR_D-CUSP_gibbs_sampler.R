@@ -36,7 +36,6 @@
 #' @param t0_adapt Off-set of MCMC adaptation
 #' @param get_latent_vars Include in output of latent variables form factor model
 #' @param rescale_pred Rescale loadings to induce correlation matrix in inputing missing values
-#' @param get_last_sample Include in output the last sample
 #' @return A list of output from the MCMC chain 
 #'
 #' @export
@@ -56,8 +55,7 @@ gibbs_JAFAR_CUSP <- function(y, X_m, n, M, p_m, binary_y=FALSE, seed=123,
                              alpha=NULL, alpha_loc=NULL,            
                              t0=-1, t1=-5e-4, t0_adapt=20,          
                              get_latent_vars=TRUE,                  
-                             rescale_pred=FALSE,                    
-                             get_last_sample=FALSE
+                             rescale_pred=FALSE
                              ){
   
   set.seed(seed)
@@ -745,14 +743,6 @@ gibbs_JAFAR_CUSP <- function(y, X_m, n, M, p_m, binary_y=FALSE, seed=123,
     output$Lambda_m=Lambda_m_MC
     output$Gamma_m=Gamma_m_MC
     output$phi_m=phi_m_MC
-  }
-  
-  if(get_last_sample){
-    output$last_sample = list(Theta=Theta,eta=eta,s2_inv=s2_inv,mu_y=mu_y,
-                              chi=chi,delta=delta,xi=xi,Lambda_m=Lambda_m,
-                              Gamma_m=Gamma_m,phi_m=phi_m,s2_inv_m=s2_inv_m,
-                              mu_m=mu_m,z_m=z_m,nu_m=nu_m,w_m=w_m,tau_m=tau_m,
-                              delta_m=delta_m,rho_m=rho_m,xi_m=xi_m,chi_m=chi_m)
   }
   
   return(output)
