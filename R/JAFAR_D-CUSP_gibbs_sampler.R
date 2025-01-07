@@ -94,10 +94,8 @@ gibbs_JAFAR_CUSP <- function(y, X_m, n, M, p_m, binary_y=FALSE, seed=123,
   if(is.null(prec0m)){prec0m=rep(1,M)} else if(is.scalar(prec0m)){prec0m=rep(prec0m,M)}
   
   # hyperparams slab in response loadings variances
-  if(is.null(a_theta)){a_theta=0.6}
-  if(is.null(b_theta)){b_theta=0.2}
-  # if(is.null(a_theta)){a_theta=0.5}
-  # if(is.null(b_theta)){b_theta=0.1}
+  if(is.null(a_theta)){a_theta=5}
+  if(is.null(b_theta)){b_theta=0.1}
   
   # hyperparams spike in response-loadings variances
   if(is.null(var_spike_theta)){var_spike_theta=0.005}
@@ -111,10 +109,8 @@ gibbs_JAFAR_CUSP <- function(y, X_m, n, M, p_m, binary_y=FALSE, seed=123,
   if(is.null(var_spike)){var_spike=rep(0.005,M)} else if(is.scalar(var_spike)){var_spike=rep(var_spike,M)}
   
   # hyperparams slab in predictors-loadings variances
-  if(is.null(a_chi)){a_chi=rep(0.6,M)} else if(is.scalar(a_chi)){a_chi=rep(a_chi,M)}
-  if(is.null(b_chi)){b_chi=rep(0.2,M)} else if(is.scalar(b_chi)){b_chi=rep(b_chi,M)}
-  # if(is.null(a_chi)){a_chi=rep(0.5,M)} else if(is.scalar(a_chi)){a_chi=rep(a_chi,M)}
-  # if(is.null(b_chi)){b_chi=rep(0.1,M)} else if(is.scalar(b_chi)){b_chi=rep(b_chi,M)}
+  if(is.null(a_chi)){a_chi=rep(0.5,M)} else if(is.scalar(a_chi)){a_chi=rep(a_chi,M)}
+  if(is.null(b_chi)){b_chi=rep(0.1,M)} else if(is.scalar(b_chi)){b_chi=rep(b_chi,M)}
   
   # hyperparam beta dist stick breaking
   if(is.null(alpha)){alpha=rep(5,M)} else if(is.scalar(alpha)){alpha=rep(alpha,M)}
@@ -521,8 +517,9 @@ gibbs_JAFAR_CUSP <- function(y, X_m, n, M, p_m, binary_y=FALSE, seed=123,
     ### 6.a.2 chi (response loadings precisions) ----
     chi <- rep(1./var_spike_theta,K)
     if(length(active_T)>0){
-      chi[active_T] <- rgamma(length(active_T),shape=a_theta+0.5,rate=1) *
-        1./(b_theta + 0.5*Theta[active_T]^2)
+      chi0 <- rgamma(1,shape=a_theta+0.5*length(active_T),rate=1) *
+        1./(b_theta + 0.5*sum(Theta[active_T]^2))
+      chi[active_T] <- chi0
     }
     
     ## 6.b Lambda_m ------------------------------------------------------------
