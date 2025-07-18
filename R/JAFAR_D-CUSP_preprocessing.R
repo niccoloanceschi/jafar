@@ -183,7 +183,7 @@ jafar_preprocess_X <- function(Z_m,Z_m_test=NULL,copula=F,smoothed=F){
   }
   
   if(copula){
-    output <- cdf_transform(Z_m,Z_m_test=NULL,smoothed=F)
+    output <- cdf_transform(Z_m,Z_m_test=Z_m_test,smoothed=F)
     Z_m = output$Z_m
     if(!is.null(Z_m_test)){Z_m_test = output$Z_m_test}
   }
