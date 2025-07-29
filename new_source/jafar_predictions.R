@@ -101,7 +101,7 @@ jafar_coeff_y <- function(Xpred,risMCMC,rescale_pred=FALSE){
   p_m = sapply(Xpred,ncol)
   
   tMCMC = length(risMCMC$K)
-  iter_print <- tMCMC %/% 10 
+  iter_print <- max(1,tMCMC %/% 10)  
   
   mu_MC  <- matrix(NA,tMCMC,nPred)
   coeff_MC <- lapply(1:M, function(m) matrix(NA,tMCMC,p_m[m]))
@@ -243,7 +243,7 @@ jafar_pred_y <- function(Xpred,risMCMC,rescale_pred=FALSE){
   p_m = sapply(Xpred,ncol)
   
   tMCMC = length(risMCMC$K)
-  iter_print <- tMCMC %/% 10 
+  iter_print <- max(1,tMCMC %/% 10)  
   
   mu_MC  <- matrix(NA,tMCMC,nPred)
   
@@ -395,7 +395,7 @@ jafar_pred_X <- function(Xpred,risMCMC,rescale_pred=FALSE){
   p_m = sapply(Xpred,ncol)
   
   tMCMC = length(risMCMC$K)
-  iter_print <- tMCMC %/% 10 
+  iter_print <- max(1,tMCMC %/% 10)  
   
   Xm_mcmc <- lapply(1:M, function(m) array(NA,c(nPred,p_m[m],tMCMC)))
   

@@ -23,6 +23,7 @@ if(FALSE){ # Install `bartMachine`
 if(FALSE){
   detach("package:IntegratedLearner", unload = TRUE)
   remove.packages("IntegratedLearner")
+  install.packages("/Users/nico/Downloads/mcmcplots_0.4.tar.gz",repos = NULL,type = "source")
   install.packages("~/Documents/PostDoc/Projects/Multi-Omics/Code/IntegratedLearner-master/", repos = NULL, type = "source")
   devtools::install_github("himelmallick/IntegratedLearner")
 }
@@ -38,7 +39,7 @@ library(magrittr)
 
 ## Select model and data ----
 
-run_simulations = T
+run_simulations = F
 
 ## Source code ----
 
@@ -58,31 +59,36 @@ out_dir = 'ris/'
 
 if(!dir.exists(out_dir)){dir.create(out_dir)}
 
+if(run_simulations){
+  out_dir <- paste0(out_dir,'sim_sec3')
+  if(!dir.exists(out_dir)){dir.create(out_dir)}
+}
+
 ## Data import  ----
 
 print(' | Loading Data ')
 
-# s_values = c(1:5)
-s_values = c(1:100)
-n_values = c(50,100,200)
+s_values = c(1:5)
+# s_values = c(1:100)
+n_values = c(50,100,150,200)
 
 for(nn in n_values){
   for(ss in s_values){
 
     if(run_simulations){
-      
-      out_dir <- paste0(out_dir,'sim_sec3')
-      if(!dir.exists(out_dir)){dir.create(out_dir)}
+      print(paste0(' --- Running Datset with n=',nn))
       data_file <- paste0('Simulated_data_n200_s',ss)
     } else {
       data_file <- 'StelzerEGA_cv-'
     }
     
+    print(paste0(' --- Running Replica with s=',ss))
+    
     if(run_simulations){
       data_dir = "data/Sec3_Simulations/"
       data_path = file.path(data_dir, paste0(data_file,'.rds'))
     } else {
-      data_dir = "data/Sec4_StelzerEGA/"
+      data_dir = "data/Sec4_StelzerEGA"
       data_path = file.path(data_dir, paste0(data_file,ss,'.rds'))
     }
     if(!dir.exists(data_dir)){stop("Input data folder not found", call.=FALSE)}
@@ -92,6 +98,8 @@ for(nn in n_values){
     if(run_simulations){
       Data <- data_scale_subset(Data,nn)
       data_file <- paste0('Sec3_Simulated_data_n',nn,'_s',ss)
+    } else {
+      data_file <- paste0(data_file,'s',ss)
     }
     
     binary_y=as.logical(min(Data$yTrain%%1==0))
@@ -106,12 +114,16 @@ for(nn in n_values){
     ## run model -----
     print(' | Running CoopL ')
     
-    tictoc::tic()
+    init_time <- proc.time() 
     coop_fit <- cv.multiview(x_list=Data$X_m, y=Data$yTrain, family=family,
                              rho=0.5, standardize=F, maxit=1e3, 
                              nfolds=length(Data$yTrain))
-    tictoc::toc()
+    end_time <- proc.time() - init_time
+    time_run = end_time["user.self"] + end_time["sys.self"]
     
+    ### Compute Response Predictions ----
+    
+    init_time <- proc.time() 
     yhat_coop_train = as.vector(predict(object = coop_fit,newx = Data$X_m, s="lambda.min"))
     yhat_coop_test = as.vector(predict(object = coop_fit,newx = Data$X_m_test, s="lambda.min"))
     
@@ -119,12 +131,14 @@ for(nn in n_values){
       yhat_coop_train = pnorm(yhat_coop_train)
       yhat_coop_test = pnorm(yhat_coop_test)
     }
-    time_CoopL = tictoc::toc()
+    end_time <- proc.time() - init_time
+    time_pred = end_time["user.self"] + end_time["sys.self"]
     
     names(yhat_coop_train) <- rownames(Data$yTrain)
     names(yhat_coop_test) <- rownames(Data$yTest)
     
-    risCoopL <- list(fit_coopL=coop_fit,y_pred_train=yhat_coop_train,y_pred_test=yhat_coop_test)
+    risCoopL <- list(fit_coopL=coop_fit,time_run=time_run,time_pred=time_pred,
+                     y_pred_train=yhat_coop_train,y_pred_test=yhat_coop_test)
     
     ## saving output ------
     
@@ -188,7 +202,7 @@ for(nn in n_values){
     ## run model ----
     print(' | Running IntegL ')
     
-    tictoc::tic()
+    init_time <- proc.time()
     fit_IntegL<-IntegratedLearner(feature_table = feature_table,
                            sample_metadata = sample_metadata, 
                            feature_metadata = feature_metadata,
@@ -196,11 +210,48 @@ for(nn in n_values){
                            meta_learner = 'SL.nnls.auc',  
                            family = family,
                            folds = 5,verbose = F)
-    time_IntegL = tictoc::toc()
+    end_time <- proc.time() - init_time
+    time_run = end_time["user.self"] + end_time["sys.self"]
     
-    risIntegLearn <- list(model_fit=fit_IntegL,
+    ### Compute Response Predictions ----
+    
+    init_time <- proc.time()
+    
+    weights <- fit_IntegL$weights
+    
+    dataX <- fit_IntegL$X_train_layers
+    
+    new_dataX <- lapply(Data$X_m_test,data.frame)
+    for(m in 1:Data$M){colnames(new_dataX[[m]]) <- Data$omics_names[[m]]}
+    names(new_dataX) <- Data$omics_types
+    
+    post.samples.train <- vector("list", length(weights))
+    names(post.samples.train) <- names(dataX)
+    
+    post.samples.test <- vector("list", length(weights))
+    names(post.samples.test) <- names(new_dataX)
+    
+    for(i in seq_along(post.samples.train)){
+      post.samples.train[[i]] <- bart_machine_get_posterior(fit_IntegL$model_fits$model_layers[[i]],dataX[[i]])$y_hat_posterior_samples
+    }
+    
+    for(i in seq_along(post.samples.test)){
+      post.samples.test[[i]] <- bart_machine_get_posterior(fit_IntegL$model_fits$model_layers[[i]],new_dataX[[i]])$y_hat_posterior_samples
+    }
+    
+    weighted.post.samples.train <-Reduce('+', Map('*', post.samples.train, weights))
+    rownames(weighted.post.samples.train) <- rownames(dataX[[1]])
+    
+    weighted.post.samples.test <-Reduce('+', Map('*', post.samples.test, weights))
+    rownames(weighted.post.samples.test) <- rownames(new_dataX[[1]])
+    
+    end_time <- proc.time() - init_time
+    time_pred = end_time["user.self"] + end_time["sys.self"]
+    
+    risIntegLearn <- list(model_fit=fit_IntegL,time_run=time_run,
                           train_pred=weighted.post.samples.train,
-                          test_pred=weighted.post.samples.test)
+                          test_pred=weighted.post.samples.test,
+                          time_pred=time_pred)
     
     ## saving output ------
     

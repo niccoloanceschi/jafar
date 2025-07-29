@@ -2,8 +2,9 @@
 gibbs_jfr <- function(X_m, y=NULL, yBinary=F, K0=NULL, 
                       nMCMC=20000, nBurnIn=15000, nThin=10, 
                       hyperparams = list(), 
-                      get_latent_vars=FALSE, rescale_pred=FALSE, 
-                      get_last_sample=FALSE){
+                      get_latent_vars=FALSE, get_last_sample=FALSE,
+                      pow_rescale=0, parallel=F,
+                      rescale_pred=FALSE){
   
   get_env <- environment()
   
@@ -55,6 +56,9 @@ gibbs_jfr <- function(X_m, y=NULL, yBinary=F, K0=NULL,
   
   # Auxiliary variables
   res_m <- eta_LaT <- list()
+  
+  # Likelihood Tempering Power
+  inv_pow_m <- 1/(p_m^pow_rescale)
   
   # ------ Latent Utilities & Missing Data --------------------------------------------------------
   
@@ -128,8 +132,13 @@ gibbs_jfr <- function(X_m, y=NULL, yBinary=F, K0=NULL,
     
     for(m in c(1:M)){
       
-      new_Loadings <- update_loadings(n, p_m[m], K, X_m[[m]], etaTeta, 
-                                      eta, mu_m[[m]], s2_inv_m[[m]], chi_m[m,])
+      if(parallel){
+        new_Loadings <- update_loadings_parallel(n, p_m[m], K, X_m[[m]], etaTeta, 
+                                                 eta, mu_m[[m]], s2_inv_m[[m]], chi_m[m,])
+      } else {
+        new_Loadings <- update_loadings(n, p_m[m], K, X_m[[m]], etaTeta, 
+                                        eta, mu_m[[m]], s2_inv_m[[m]], chi_m[m,])
+      }
       
       Lambda_m[[m]] <- new_Loadings[,c(1:K),drop=F]
       
@@ -199,6 +208,11 @@ gibbs_jfr <- function(X_m, y=NULL, yBinary=F, K0=NULL,
       logP_Spikes[m,] <- -0.5*vec_Lm/var_spike[m] - rep(0.5*p_m[m]*log(2*pi*var_spike[m]),K)
       logP_Slabs[m,]  <- -(0.5*p_m[m]+a_chi[m])*log(1+0.5*vec_Lm/b_chi[m]) +
         rep(lgamma(0.5*p_m[m]+a_chi[m]) - lgamma(a_chi[m]) - 0.5*p_m[m]*log(2*pi*b_chi[m]),K)
+      
+      # Likelihood Tempering Power
+      logP_Spikes[m,] <- logP_Spikes[m,] * inv_pow_m[m]
+      logP_Slabs[m,] <- logP_Slabs[m,] * inv_pow_m[m]
+      
       logP_diff[m,] <- logP_Slabs[m,] - logP_Spikes[m,]
     }
     
@@ -206,7 +220,7 @@ gibbs_jfr <- function(X_m, y=NULL, yBinary=F, K0=NULL,
     #|    (i)   a priori: $ P[\delta_Lm[m,h] = l] = xi_{m l} $
       
     for(m in 1:M){
-      delta_Lm[m,] <- update_cusp(M,K,logP_Spikes[m,],logP_Slabs[m,],pi_m[m,])
+      delta_Lm[m,] <- update_cusp(K,logP_Spikes[m,],logP_Slabs[m,],pi_m[m,])
     }
     
     # identifying active columns
@@ -268,12 +282,11 @@ gibbs_jfr <- function(X_m, y=NULL, yBinary=F, K0=NULL,
     }
     
     if(is_supervised){
-      psi   <- rep(1./var_spike_y,K)
-
-      psi0 <- rgamma(1,shape=a_theta+0.5*sum(zeta),rate=1) *
-        1./(b_theta + 0.5*sum(Theta^2*zeta))
-
-      psi[active_T] <- psi0
+      # psi   <- rep(1./var_spike_y,K)
+      # psi0 <- rgamma(1,shape=a_theta+0.5*sum(zeta),rate=b_theta + 0.5*sum(Theta^2*zeta))
+      # psi[active_T] <- psi0
+      psi0 <- rgamma(1,shape=a_theta+0.5*K,rate=b_theta + 0.5*sum(Theta^2))
+      psi <- rep(psi0,K)
     }
     
     # 8: Adaptation ------------------------------------------------------------
@@ -380,6 +393,24 @@ gibbs_jfr <- function(X_m, y=NULL, yBinary=F, K0=NULL,
     }
   }
   
+  # Trim Samples ---------------------------------------------------------------
+  
+  Kmax = max(K_MC)
+  
+  active_L_MC <- active_L_MC[,1:Kmax,]
+  
+  if(get_latent_vars){
+    eta_MC <- eta_MC[,,1:Kmax]
+    for(m in c(1:M)){
+      Lambda_m_MC[[m]] <- Lambda_m_MC[[m]][,,1:Kmax]
+    }
+  }
+  
+  if(is_supervised){
+    Theta_MC<- Theta_MC[,1:Kmax]
+    active_T_MC <- active_T_MC[,1:Kmax]
+  }
+  
   # Output ---------------------------------------------------------------------
   
   output = list(K=K_MC,K_Lm_eff=K_Lm_eff_MC,
@@ -388,7 +419,8 @@ gibbs_jfr <- function(X_m, y=NULL, yBinary=F, K0=NULL,
   
   extra_params = list(model='jfr_i-cusp',
                       rescale_pred=rescale_pred, K0=K0, K0_m=K0_m, 
-                      nBurnIn=nBurnIn, nMCMC=nMCMC, nThin=nThin)
+                      nBurnIn=nBurnIn, nMCMC=nMCMC, nThin=nThin,
+                      pow_rescale=pow_rescale)
   hyperparams = c(extra_params, hyperparams)
   
   output$hyper_param=hyperparams

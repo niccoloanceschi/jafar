@@ -1,8 +1,4 @@
 
-library(reticulate)
-source_python("/Users/nico/Documents/GitHub/JAFAR_all/inspecting_indCUSP/get_array_indicators.py")
-# Rcpp::sourceCpp('/Users/nico/Documents/GitHub/JAFAR_all/inspecting_indCUSP/get_array_indicators.cpp')
-
 make_tensor_W_vectorized <- function(...) {
   vectors <- list(...)
   out <- Reduce(function(x, y) outer(x, y, "+"), vectors)

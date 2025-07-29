@@ -17,7 +17,7 @@ Rcpp::NumericMatrix update_loadings(int n, int p_m, int Ktot,
   for (int j = 0; j < p_m; ++j) {
 
     arma::mat Q_load_mj = prior_prec_mj + s2_inv_m(j)*facTfac;
-    arma::vec r_load_mj = s2_inv_m(j) * fac.t() * (X_m.col(j) - mu_m(j)*arma::ones(n));
+    arma::vec r_load_mj = s2_inv_m(j) * fac.t() * (X_m.col(j) - mu_m(j));
 
     arma::mat L_load_mj  = trimatu(chol(Q_load_mj));
     arma::vec Lr_load_mj = solve(trimatl(L_load_mj.t()), r_load_mj);
@@ -30,6 +30,3 @@ Rcpp::NumericMatrix update_loadings(int n, int p_m, int Ktot,
   
   return Rcpp::wrap(new_load_m);
 }
-
-  
-

@@ -26,9 +26,9 @@ library(BSFP)
 
 ## Select model and data ----
 
-run_simulations = T
+run_simulations = F
 run_supervised = T
-predict_views = F
+predict_views = T
 
 ## Source code ----
 
@@ -94,6 +94,8 @@ Data <- readRDS(data_path)
 if(run_simulations){
   Data <- data_scale_subset(Data,nn)
   data_file <- paste0('Sec3_Simulated_data_n',nn,'_s',ss)
+} else {
+  data_file <- paste0(data_file,'s',ss)
 }
 
 ## Formatting Input Data -------------------------------------------------------
@@ -122,8 +124,8 @@ binary_y=as.logical(min(Data$yTrain%%1==0))
 
 # MCMC Parameters --------------------------------------------------------------
 
-nMCMC = 20000 # 10000 # 20000
-nBurnIn = 15000 # 6000 # 15000 
+nMCMC = 20000 # 10000 # 
+nBurnIn = 15000 # 6000 # 
 nThin = 10 # 1 #  
 
 nMCtest = floor(nMCMC/nThin)
@@ -131,34 +133,48 @@ nMCtest = floor(nMCMC/nThin)
 # Gibbs Sampler ----------------------------------------------------------------
 print(' | Running MCMC and computing predicitions ')
 
-timerun = NULL
-tictoc::tic()
+init_time <- proc.time()
 bsfp_mcmc <- bsfp(data = X.train, Y = y_run, nsample = nMCMC, thinning = nThin, 
-                    progress = T, save_init = T, save_structures = F,
-                    save_predictive_model = T, save_loadings_scores = T,
-                    save_imputations = F, save_last_sample = T)
-timerun = tictoc::toc()
-
-# Response Predictions ---------------------------------------------------------
+                  # ranks = rep(2,Data$M+1),
+                  progress = T, save_init = T, save_structures = F,
+                  save_predictive_model = T, save_loadings_scores = T,
+                  save_imputations = F, save_last_sample = T)
+end_time <- proc.time() - init_time
+time_run = end_time["user.self"] + end_time["sys.self"]
 
 ris_BSFP <- list(bsfp_mcmc=bsfp_mcmc,time_run=time_run)
 
+# Response Predictions ---------------------------------------------------------
+
 if(run_supervised){
+
+  print(" | Response OOS Prediction")
+  
+  init_time <- proc.time()
   bsfp_train <- bsfp.predict.oos(bsfp.fit=bsfp_mcmc, test_data=X.train, nsample=nMCtest)
   bsfp_test <- bsfp.predict.oos(bsfp.fit=bsfp_mcmc, test_data=X.test, nsample=nMCtest)
+  end_time <- proc.time() - init_time
+  time_pred = end_time["user.self"] + end_time["sys.self"]
   
-  ris_BSFP <- list(train_pred=bsfp_train,test_pred=bsfp_test)
+  ris_BSFP <- c(ris_BSFP,list(time_pred=time_pred,
+                              train_pred=bsfp_train,
+                              test_pred=bsfp_test))
 }
 
 # Omics Predictions ------------------------------------------------------------
 
 if(predict_views){
   
-  nBurnInTest = floor(nMCtest/2)
+  print(" | Views OOS Prediction")
   
-  Xm_train_bsfp <- lapply(1:Data$M, function(m) array(NA,c(nMCtest-nBurnInTest-1,Data$p_m[m],Data$n)))
-  Xm_test_bsfp  <- lapply(1:Data$M, function(m) array(NA,c(nMCtest-nBurnInTest-1,Data$p_m[m],Data$nTest)))
+  nBurnInTest = 0 # floor(nMCtest/2) # 
   
+  Xm_train_bsfp <- lapply(1:Data$M, function(m) array(NA,c(nMCtest-nBurnInTest,Data$p_m[m],Data$n)))
+  Xm_test_bsfp  <- lapply(1:Data$M, function(m) array(NA,c(nMCtest-nBurnInTest,Data$p_m[m],Data$nTest)))
+  # double check
+  tXm_train_bsfp <- Xm_train_bsfp
+  tXm_test_bsfp  <- Xm_test_bsfp
+    
   for(m in 1:Data$M){
     
     X.train.NA <- X.train
@@ -167,17 +183,23 @@ if(predict_views){
     X.test.NA <- X.test
     X.test.NA[[m,1]] <- NA*X.test[[m,1]]
     
-    bsfp.X.train <- bsfp.predict.NA(bsfp.fit=ris_BSFP$mcmc_run, test_data=X.train.NA, nsample=nMCtest)
-    bsfp.X.test <- bsfp.predict.NA(bsfp.fit=ris_BSFP$mcmc_run, test_data=X.test.NA, nsample=nMCtest)
+    bsfp.X.train <- bsfp.predict.oos(bsfp.fit=bsfp_mcmc, test_data=X.train.NA, nsample=nMCtest)
+    bsfp.X.test <- bsfp.predict.oos(bsfp.fit=bsfp_mcmc, test_data=X.test.NA, nsample=nMCtest)
     
     for(t in c((nBurnInTest+1):(nMCtest-1))){
       Xm_train_bsfp[[m]][t-nBurnInTest,,] <- matrix(bsfp.X.train$Xm.draw[[t]][[m,1]],ncol=Data$n)
       Xm_test_bsfp[[m]][t-nBurnInTest,,]  <- matrix(bsfp.X.test$Xm.draw[[t]][[m,1]],ncol=Data$nTest)
+      # double check 
+      tXm_train_bsfp[[m]][t-nBurnInTest,,] <- t(matrix(bsfp.X.train$Xm.draw[[t]][[m,1]],nrow=Data$n))
+      tXm_test_bsfp[[m]][t-nBurnInTest,,]  <- t(matrix(bsfp.X.test$Xm.draw[[t]][[m,1]],nrow=Data$nTest))  
     }
   }
   
   ris_BSFP$Xm_train_bsfp <- Xm_train_bsfp
   ris_BSFP$Xm_test_bsfp <- Xm_test_bsfp
+  # double check 
+  ris_BSFP$tXm_train_bsfp <- tXm_train_bsfp
+  ris_BSFP$tXm_test_bsfp <- tXm_test_bsfp
 }
 
 # Saving Output ----------------------------------------------------------------

@@ -89,6 +89,8 @@ Data <- readRDS(data_path)
 if(run_simulations){
   Data <- data_scale_subset(Data,nn)
   data_file <- paste0('Sec3_Simulated_data_n',nn,'_s',ss)
+} else {
+  data_file <- paste0(data_file,'s',ss)
 }
 
 ## Formatting Input Data -------------------------------------------------------
@@ -97,45 +99,55 @@ Xy = Data$X_m
 var_types=rep(0,Data$M)
 
 if(run_supervised){
-  Xy[Data$M+1] = Data$yTrain
+  Xy[[Data$M+1]] = matrix(Data$yTrain,ncol=1)
   var_types=c(var_types,1)
 }
 
 # MCMC Parameters --------------------------------------------------------------
 
-nMCMC = 5000 # 
-nBurnIn = nMCMC/2
+nMCMC = 20000 # 
+nBurnIn = 15000 # 
 
-Ktot = 15 # 20 # 
+Ktot = 30 # 15 # 20 # 30 # 
 
 # Gibbs Sampler ----------------------------------------------------------------
 print(' | Running MCMC and computing predicitions ')
 
-timerun = NULL
-tictoc::tic()
+init_time <- proc.time()
 BIPrun=BIP(dataList=Xy,IndicVar=var_types,Method="BIP",
-           nbrcomp=Ktot,sample=nMCMC,burnin=nBurnIn)
-timerun = tictoc::toc()
-
-# Response Predictions ---------------------------------------------------------
+           nbrcomp=Ktot,sample=nMCMC-nBurnIn,burnin=nBurnIn)
+end_time <- proc.time() - init_time
+time_run = end_time["user.self"] + end_time["sys.self"]
 
 ris_BIP <- list(runBIP=BIPrun,time_run=time_run)
 
+# Response Predictions ---------------------------------------------------------
+
 if(run_supervised){
   
+  print(" | Response OOS Prediction")
+  
+  init_time <- proc.time()
   trainPred = BIPpredict(Data$X_m,Result=BIPrun,meth='BMA')
   testPred = BIPpredict(Data$X_m_test,Result=BIPrun,meth='BMA')
+  end_time <- proc.time() - init_time
+  time_pred = end_time["user.self"] + end_time["sys.self"]
   
-  ris_BIP <- c(ris_BIP,train_pred=trainPred,test_pred=testPred)
+  ris_BIP <- c(ris_BIP,list(time_pred=time_pred,
+                            train_pred=trainPred,
+                            test_pred=testPred))
 }
 
 # Reconstructed Covariance -----------------------------------------------------
 
+print(" | Computing Mean Covariances")
+
 cov_mean_m <- list()
 for(m in 1:Data$M){
-  cov_estim_m[[m]] = diag(BIPrun$EstSig2[[m]],Data$p_m[m],Data$p_m[m])
+  cov_mean_m[[m]] = diag(BIPrun$EstSig2[[m]],Data$p_m[m],Data$p_m[m])
   for(t in 1:length(BIPrun$EstLoadModel)){
-    cov_estim_m[[m]] = tmp + BIPrun$PostGam[[t]]*crossprod(BIPrun$EstLoadModel[[t]][[m]])
+    cov_mean_m[[m]] = cov_mean_m[[m]] +
+      BIPrun$PostGam[[t]]*crossprod(BIPrun$EstLoadModel[[t]][[m]])
   }
 }
 
@@ -146,7 +158,7 @@ print(' | Saving Output ')
 
 repCount <- 0
 if(run_supervised){data_file <- paste0(data_file,'_y')}
-fileName <- paste0(data_file,'_bip_nMC',nMCMC,'_nBurn',nBurnIn,'_nThin',nThin)
+fileName <- paste0(data_file,'_bip_nMC',nMCMC,'_nBurn',nBurnIn)
 
 risFile  <- paste0(fileName,'_rep',repCount,'.rds')
 
