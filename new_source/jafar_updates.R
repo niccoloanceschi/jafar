@@ -1,4 +1,19 @@
 
+rmvnorm_from_prec <- function(n, r, Q) {
+  
+  p <- length(r)
+  
+  R <- chol(Q)
+  
+  mu <- backsolve(R, backsolve(R, r, transpose = TRUE))
+
+  V <- backsolve(R, matrix(rnorm(p * n), nrow = p, ncol = n)) 
+  
+  X <- t( t(V) + mu ) 
+  
+  return(X) 
+}
+
 update_loadings_R <- function(n, p_m, Ktot, X_m, facTfac, fac_m, mu_m, s2_inv_m, prec_m){
   
   new_Loadings_m <- matrix(0,p_m,Ktot)
@@ -49,11 +64,11 @@ update_factors_collapsed <- function(n, M, K, K_Gm, res_m, s2_inv_m, Lambda_m, G
       t((res_m[[m]]%*%s2_Ga_m[[m]])%*%Dinv_GaT_s2_La_m)
   }
   
-  L_eta    <- t(chol(Q_eta))
-  Lr_eta   <- forwardsolve(L_eta, r_eta)
-  
-  mean_eta <- backsolve(t(L_eta), Lr_eta)
-  std_eta  <- backsolve(t(L_eta), matrix(rnorm(K*n),K,n))
+  L_eta    <- chol(Q_eta)
+  Lr_eta   <- forwardsolve(t(L_eta), r_eta)
+
+  mean_eta <- backsolve(L_eta, Lr_eta)
+  std_eta  <- backsolve(L_eta, matrix(rnorm(K*n),K,n))
   
   eta_new  <- t(mean_eta + std_eta)
   
@@ -230,33 +245,6 @@ update_cusp <- function(K,logP_Spikes,logP_Slabs,pi_m){
   #| Remarks:
   #|    in Hmisc::rMultinom(probs,nsample), the h-th row of `probs` gives the
   #|    probabilities for the l classes among which the h-th variable is sampled
-  delta_m  <- as.vector(Hmisc::rMultinom(pr_D,1))
-  
-  return(delta_m)
-}
-
-
-update_cusp_resc <- function(K,logP_Spikes,logP_Slabs,pi_m,pow_m){
-  
-  # un-normalized (log)-probability matrices
-  lonP_N <- matrix(logP_Spikes,K,K) 
-  logP_T <- matrix(logP_Slabs,K,K)
-  
-  # un-normalized (log)-probability matrix
-  lonP_D <- lonP_N
-  lonP_D[upper.tri(lonP_D,diag=F)] <- logP_T[upper.tri(lonP_D,diag=F)]
-  lonP_D <- lonP_D + pow_m*t(matrix(log(pi_m),K,K))
-  
-  # normalized probability matrix
-  max_pD <- matrix(apply(lonP_D, 1, max),K,K)
-  pr_D   <- exp(lonP_D - max_pD)
-  pr_Tot <- apply(pr_D, 1, sum)
-  pr_D   <- pr_D/pr_Tot
-  
-  # sampling
-  #| Remarks:
-    #|    in Hmisc::rMultinom(probs,nsample), the h-th row of `probs` gives the
-    #|    probabilities for the l classes among which the h-th variable is sampled
   delta_m  <- as.vector(Hmisc::rMultinom(pr_D,1))
   
   return(delta_m)

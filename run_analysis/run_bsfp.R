@@ -4,7 +4,8 @@ rm(list = ls())
 run_cluster = F
 
 if(run_cluster){
-  path <- '/hpc/group/dunsonlab/na224/multiomics/' # cluster simulations
+  # path <- '/hpc/group/dunsonlab/na224/multiomics/' # cluster simulations
+  path <- '/hpc/group/herringlab/na224/multiomics/' # cluster simulations
 } else{ 
   path <- '~/Documents/GitHub/jafar/' # local simulations
 }
@@ -61,8 +62,8 @@ if(run_simulations){
     if (length(commandArgs(trailingOnly = TRUE)) != 2) {
       stop("Usage: your_script.R <n> <s>")
     }
-    nn <- as.integer(commandArgs(trailingOnly = TRUE)[1])
-    ss <- as.integer(commandArgs(trailingOnly = TRUE)[2])
+    nn <- as.integer(commandArgs(trailingOnly = TRUE)[2])
+    ss <- as.integer(commandArgs(trailingOnly = TRUE)[1])
   } else {
     nn <- 50 # 100 # 200 # 
     ss <- 10 # 5 # 
@@ -70,7 +71,7 @@ if(run_simulations){
   data_file <- paste0('Simulated_data_n200_s',ss)
 } else {
   if(run_cluster){
-    if (length(commandArgs(trailingOnly = TRUE)) != 1) {
+    if (length(commandArgs(trailingOnly = TRUE)) < 1) {
       stop("Usage: your_script.R <s>")
     }
     ss <- as.integer(commandArgs(trailingOnly = TRUE)[1])
@@ -124,8 +125,8 @@ binary_y=as.logical(min(Data$yTrain%%1==0))
 
 # MCMC Parameters --------------------------------------------------------------
 
-nMCMC = 20000 # 10000 # 
-nBurnIn = 15000 # 6000 # 
+nMCMC = 6000 # 8000 # 
+nBurnIn = 3000 # 4000 # 
 nThin = 10 # 1 #  
 
 nMCtest = floor(nMCMC/nThin)
@@ -167,14 +168,11 @@ if(predict_views){
   
   print(" | Views OOS Prediction")
   
-  nBurnInTest = 0 # floor(nMCtest/2) # 
+  nBurnInTest = floor(nMCtest/2) 
   
-  Xm_train_bsfp <- lapply(1:Data$M, function(m) array(NA,c(nMCtest-nBurnInTest,Data$p_m[m],Data$n)))
-  Xm_test_bsfp  <- lapply(1:Data$M, function(m) array(NA,c(nMCtest-nBurnInTest,Data$p_m[m],Data$nTest)))
-  # double check
-  tXm_train_bsfp <- Xm_train_bsfp
-  tXm_test_bsfp  <- Xm_test_bsfp
-    
+  Cov_m_mean <- lapply(1:Data$M, function(m) matrix(0,Data$p_m[m],Data$p_m[m]))
+  Marg_Var_m <- lapply(1:Data$M, function(m) matrix(NA,nMCtest-nBurnInTest,Data$p_m[m]))
+  
   for(m in 1:Data$M){
     
     X.train.NA <- X.train
@@ -184,41 +182,44 @@ if(predict_views){
     X.test.NA[[m,1]] <- NA*X.test[[m,1]]
     
     bsfp.X.train <- bsfp.predict.oos(bsfp.fit=bsfp_mcmc, test_data=X.train.NA, nsample=nMCtest)
-    bsfp.X.test <- bsfp.predict.oos(bsfp.fit=bsfp_mcmc, test_data=X.test.NA, nsample=nMCtest)
+    # bsfp.X.test <- bsfp.predict.oos(bsfp.fit=bsfp_mcmc, test_data=X.test.NA, nsample=nMCtest)
     
-    for(t in c((nBurnInTest+1):(nMCtest-1))){
-      Xm_train_bsfp[[m]][t-nBurnInTest,,] <- matrix(bsfp.X.train$Xm.draw[[t]][[m,1]],ncol=Data$n)
-      Xm_test_bsfp[[m]][t-nBurnInTest,,]  <- matrix(bsfp.X.test$Xm.draw[[t]][[m,1]],ncol=Data$nTest)
-      # double check 
-      tXm_train_bsfp[[m]][t-nBurnInTest,,] <- t(matrix(bsfp.X.train$Xm.draw[[t]][[m,1]],nrow=Data$n))
-      tXm_test_bsfp[[m]][t-nBurnInTest,,]  <- t(matrix(bsfp.X.test$Xm.draw[[t]][[m,1]],nrow=Data$nTest))  
+    for(t in c((nBurnInTest+1):nMCtest)){
+      Xm_train_bsfp_m_t <- matrix(bsfp.X.train$Xm.draw[[t-1]][[m,1]],ncol=Data$n)
+      # Xm_test_bsfp_m_t <- matrix(bsfp.X.test$Xm.draw[[t-1]][[m,1]],ncol=Data$nTest)
+     
+      Cov_m_mean[[m]] <- Cov_m_mean[[m]] + cov(t(Xm_train_bsfp_m_t)) / (nMCtest-nBurnInTest)
+      Marg_Var_m[[m]][t,] <- apply(t(Xm_train_bsfp_m_t),2,var)   
     }
   }
   
-  ris_BSFP$Xm_train_bsfp <- Xm_train_bsfp
-  ris_BSFP$Xm_test_bsfp <- Xm_test_bsfp
-  # double check 
-  ris_BSFP$tXm_train_bsfp <- tXm_train_bsfp
-  ris_BSFP$tXm_test_bsfp <- tXm_test_bsfp
+  for(m in 1:M){ 
+    Cov_m_mean[[m]] <- Cov_m_mean[[m]]*(ris_BSFP$bsfp_mcmc$sigma.mat[m,1]^2)
+  }
+  
+  ris_BSFP$Cov_m_mean = Cov_m_mean
+  ris_BSFP$Marg_Var_m = Marg_Var_m
 }
 
 # Saving Output ----------------------------------------------------------------
 print(' | Saving Output ')
 
-repCount <- 0
-if(run_supervised){data_file <- paste0(data_file,'_y')}
-fileName <- paste0(data_file,'_bsfp_nMC',nMCMC,'_nBurn',nBurnIn,'_nThin',nThin)
-
-risFile  <- paste0(fileName,'_rep',repCount,'.rds')
-
-while(file.exists(file.path(out_dir, risFile))){
-  repCount <- repCount + 1
-  risFile <- paste(fileName,'_rep',repCount,'.rds',sep='')
+if(F){
+  repCount <- 0
+  if(run_supervised){data_file <- paste0(data_file,'_y')}
+  fileName <- paste0(data_file,'_bsfp_nMC',nMCMC,'_nBurn',nBurnIn,'_nThin',nThin)
+  
+  risFile  <- paste0(fileName,'_rep',repCount,'.rds')
+  
+  while(file.exists(file.path(out_dir, risFile))){
+    repCount <- repCount + 1
+    risFile <- paste(fileName,'_rep',repCount,'.rds',sep='')
+  }
+  
+  saveRDS(ris_BSFP,file.path(out_dir, risFile))
+  
+  print(risFile)
 }
-
-saveRDS(ris_BSFP,file.path(out_dir, risFile))
-
-print(risFile)
 
 
 

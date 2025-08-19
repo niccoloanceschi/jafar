@@ -3,7 +3,7 @@ gibbs_jfr <- function(X_m, y=NULL, yBinary=F, K0=NULL,
                       nMCMC=20000, nBurnIn=15000, nThin=10, 
                       hyperparams = list(), 
                       get_latent_vars=FALSE, get_last_sample=FALSE,
-                      pow_rescale=0, parallel=F,
+                      pow_tempering=0, parallel=F,
                       rescale_pred=FALSE){
   
   get_env <- environment()
@@ -58,7 +58,23 @@ gibbs_jfr <- function(X_m, y=NULL, yBinary=F, K0=NULL,
   res_m <- eta_LaT <- list()
   
   # Likelihood Tempering Power
-  inv_pow_m <- 1/(p_m^pow_rescale)
+  inv_pow_Lm <- M^(pow_tempering==0)/p_m^(pow_tempering)
+  
+  if(T){
+    inv_pow_Lm0 <- inv_pow_Lm
+    if(pow_tempering==0){
+      inv_pow_Lm <- rep(1,M)
+    } else {
+      prob_m = sapply(1:M, function(m)
+        2*stevemisc::pst(-qnorm(0.75,sd=sqrt(var_spike[m])),df=2*a_chi[m],
+                         mu=0,sigma=sqrt(b_chi[m]/a_chi[m])))
+      # inv_pow_Lm <- M/((1-prob_m)*p_m)
+      inv_pow_Lm <- sqrt(M)/((1-prob_m)*p_m)
+    }
+  }
+  
+  # Rescaling CUSP concentration
+  alpha_L = alpha_L / sqrt(M)
   
   # ------ Latent Utilities & Missing Data --------------------------------------------------------
   
@@ -210,18 +226,18 @@ gibbs_jfr <- function(X_m, y=NULL, yBinary=F, K0=NULL,
         rep(lgamma(0.5*p_m[m]+a_chi[m]) - lgamma(a_chi[m]) - 0.5*p_m[m]*log(2*pi*b_chi[m]),K)
       
       # Likelihood Tempering Power
-      logP_Spikes[m,] <- logP_Spikes[m,] * inv_pow_m[m]
-      logP_Slabs[m,] <- logP_Slabs[m,] * inv_pow_m[m]
+      logP_Spikes[m,] <- logP_Spikes[m,] * inv_pow_Lm[m]
+      logP_Slabs[m,] <- logP_Slabs[m,] * inv_pow_Lm[m]
       
       logP_diff[m,] <- logP_Slabs[m,] - logP_Spikes[m,]
     }
     
     #| Remark:
-    #|    (i)   a priori: $ P[\delta_Lm[m,h] = l] = xi_{m l} $
+      #|    (i)   a priori: $ P[\delta_Lm[m,h] = l] = xi_{m l} $
       
-    for(m in 1:M){
-      delta_Lm[m,] <- update_cusp(K,logP_Spikes[m,],logP_Slabs[m,],pi_m[m,])
-    }
+      for(m in 1:M){
+        delta_Lm[m,] <- update_cusp(K,logP_Spikes[m,],logP_Slabs[m,],pi_m[m,])
+      }
     
     # identifying active columns
     for(m in 1:M){
@@ -262,7 +278,7 @@ gibbs_jfr <- function(X_m, y=NULL, yBinary=F, K0=NULL,
       count_eq <- colSums(as.matrix(delta_Lm[m,] == matrix(1:K,K,K,byrow=T)))
       count_gr <- rev(cumsum(rev(c(count_eq[-1],0))))
       
-      rho_m[m,] <- c(rbeta(K-1, shape1 = 1+count_eq[-K], shape2 = alpha[m]+count_gr[-K]),1.)
+      rho_m[m,] <- c(rbeta(K-1, shape1 = 1+count_eq[-K], shape2 = alpha_L[m]+count_gr[-K]),1.)
       pi_m[m,]  <- rho_m[m,]*c(1,cumprod(1-rho_m[m,-K]))
     }
     
@@ -291,7 +307,7 @@ gibbs_jfr <- function(X_m, y=NULL, yBinary=F, K0=NULL,
     
     # 8: Adaptation ------------------------------------------------------------
     
-    if((t>t0_adapt) & (runif(1) < exp(t0 + t1*t))){
+    if((t>t0_adapt) & (t<nBurnIn) & (runif(1) < exp(t0 + t1*t))){
       
       active_J <- unique(unlist(active_L))
       K_eff <- length(active_J)
@@ -325,7 +341,7 @@ gibbs_jfr <- function(X_m, y=NULL, yBinary=F, K0=NULL,
           Lambda_m[[m]] <- cbind(Lambda_m[[m]],sqrt(var_spike[m])*rnorm(p_m[m]))
         }
         delta_Lm <- cbind(delta_Lm,rep(1,M))
-        rho_m    <- cbind(rho_m[,-(K-1)],rbeta(1,shape1=1,shape2=alpha),rep(1,M))
+        rho_m    <- cbind(rho_m[,-(K-1)],rbeta(1,shape1=1,shape2=alpha_L),rep(1,M))
         pi_m     <- rho_m * cbind(rep(1,M),t(apply(1-rho_m[,-K],1,cumprod)))
         chi_m    <- cbind(chi_m,1./var_spike)
         
@@ -357,7 +373,7 @@ gibbs_jfr <- function(X_m, y=NULL, yBinary=F, K0=NULL,
         Marg_Var_m_MC[[m]][teff,] <- 1/s2_inv_m[[m]] + rowSums(Lambda_m[[m]]^2)
         s2_inv_m_MC[[m]][teff,]   <- s2_inv_m[[m]]
         mu_m_MC[[m]][teff,]       <- mu_m[[m]]
-
+        
         Cov_m_mean[[m]] <- Cov_m_mean[[m]] +
           ( tcrossprod(Lambda_m[[m]]) + diag(1/s2_inv_m[[m]]) ) / nEff
       }
@@ -418,9 +434,9 @@ gibbs_jfr <- function(X_m, y=NULL, yBinary=F, K0=NULL,
                 Marg_Var_m=Marg_Var_m_MC,active_Lm=active_L_MC)
   
   extra_params = list(model='jfr_i-cusp',
-                      rescale_pred=rescale_pred, K0=K0, K0_m=K0_m, 
+                      rescale_pred=rescale_pred, K0=K0, 
                       nBurnIn=nBurnIn, nMCMC=nMCMC, nThin=nThin,
-                      pow_rescale=pow_rescale)
+                      pow_tempering=pow_tempering)
   hyperparams = c(extra_params, hyperparams)
   
   output$hyper_param=hyperparams
@@ -453,3 +469,7 @@ gibbs_jfr <- function(X_m, y=NULL, yBinary=F, K0=NULL,
   
   return(output)
 }
+
+
+
+

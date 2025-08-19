@@ -35,8 +35,8 @@ jafar_set_hyperparameters <- function(hyperparams_list, M, is_supervised=F) {
     var_spike = 0.005, # variance of normal spike in cusps
     a_chi = 0.5, # shape of inv.gamma slab hyperprior in cusps
     b_chi = 0.1, # rate of inv.gamma slab hyperprior in cusps
-    alpha = 5, # DP concentration parameter in shared component
-    alpha_loc = 5  # DP concentration parameter in specific components
+    alpha_L = 5, # DP concentration parameter in shared component
+    alpha_G = 5  # DP concentration parameter in specific components
   )
   
   full_names = c(names(mcmc_defaults),names(defaults))

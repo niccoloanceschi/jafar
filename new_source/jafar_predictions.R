@@ -96,9 +96,10 @@ jafar_coeff_y_t <- function(Xpred,nPred,M,p_m,K,K_m,Lambda_m,Gamma_m,Theta,
 
 jafar_coeff_y <- function(Xpred,risMCMC,rescale_pred=FALSE){
   
-  M = length(Xpred)
+  M = length(risMCMC$mu_m)
+  p_m = sapply(risMCMC$mu_m,ncol)
+  
   nPred = unlist(sapply(Xpred,nrow))[1]
-  p_m = sapply(Xpred,ncol)
   
   tMCMC = length(risMCMC$K)
   iter_print <- max(1,tMCMC %/% 10)  
@@ -196,7 +197,7 @@ jafar_pred_y_t <- function(Xpred,nPred,M,p_m,K,K_m,Lambda_m,Gamma_m,Theta,
   r_eta <- matrix(0,K,nPred)
   
   for(m in 1:M){
-  
+    
     mar_std_m = rep(1,p_m[m])
     if(rescale_pred){
       mar_std_m = sqrt(1/s2_inv_m[[m]] + rowSums(as.matrix(Lambda_m[[m]]^2)) + rowSums(as.matrix(Gamma_m[[m]]^2)))
@@ -238,9 +239,10 @@ jafar_pred_y_t <- function(Xpred,nPred,M,p_m,K,K_m,Lambda_m,Gamma_m,Theta,
 
 jafar_pred_y <- function(Xpred,risMCMC,rescale_pred=FALSE){
   
-  M = length(Xpred)
+  M = length(risMCMC$mu_m)
+  p_m = sapply(risMCMC$mu_m,ncol)
+  
   nPred = unlist(sapply(Xpred,nrow))[1]
-  p_m = sapply(Xpred,ncol)
   
   tMCMC = length(risMCMC$K)
   iter_print <- max(1,tMCMC %/% 10)  
@@ -390,9 +392,10 @@ jafar_pred_X_t <- function(Xpred,nPred,M,p_m,K,K_m,Lambda_m,Gamma_m,mu_m,s2_inv_
 
 jafar_pred_X <- function(Xpred,risMCMC,rescale_pred=FALSE){
   
-  M = length(Xpred)
+  M = length(risMCMC$mu_m)
+  p_m = sapply(risMCMC$mu_m,ncol)
+  
   nPred = unlist(sapply(Xpred,nrow))[1]
-  p_m = sapply(Xpred,ncol)
   
   tMCMC = length(risMCMC$K)
   iter_print <- max(1,tMCMC %/% 10)  
@@ -401,7 +404,6 @@ jafar_pred_X <- function(Xpred,risMCMC,rescale_pred=FALSE){
   
   print(" - Computing Omics Predictions - ")
   print(sprintf(fmt = "%10s%3s%2s", "[",0,"%]"))
-  
   
   for(t in 1:tMCMC){
     

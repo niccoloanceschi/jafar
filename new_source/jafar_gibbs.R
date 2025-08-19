@@ -1,23 +1,9 @@
 
-
-find_crossing <- function(a, b, tau_inf2) {
-  
-  log_slab <- function(x){dt(x/sqrt(b/a),df=2*a,log=TRUE)-0.5*log(b/a)}
-  
-  log_spike <- function(x){dnorm(x,mean=0,sd=sqrt(tau_inf2),log=TRUE)}
-  
-  log_diff <- function(x) log_slab(x) - log_spike(x)
-  
-  result <- uniroot(log_diff, lower = sqrt(tau_inf2), upper = sqrt(b/a), tol = 1e-6)
-  
-  return(result$root)
-}
-
 gibbs_jafar <- function(X_m, y=NULL, yBinary=F, K0=NULL, K0_m=NULL, 
                         nMCMC=20000, nBurnIn=15000, nThin=10, 
                         hyperparams = list(), which_prior='d-cusp',
                         get_latent_vars=FALSE, get_last_sample=FALSE,
-                        pow_rescale=0, parallel=F,
+                        pow_tempering=0, parallel=F,
                         rescale_pred=FALSE){
   
   get_env <- environment()
@@ -65,43 +51,28 @@ gibbs_jafar <- function(X_m, y=NULL, yBinary=F, K0=NULL, K0_m=NULL,
   res_m <- eta_LaT <- phi_GaT <- list()
   
   # Likelihood Tempering Power
-  # inv_pow_m <- 1/(p_m^pow_rescale)
-  eps_cross <- sapply(1:M, function(m) find_crossing(a_chi[m],b_chi[m],var_spike[m]) )
-  frac_res <- sapply(1:M, function(m) 2*pnorm(-eps_cross[m],sd=sqrt(var_spike[m])))
-  # frac_res <- sapply(1:M, function(m)
-  #   stevemisc::pst(eps_cross[m],df=2*a_chi[m],mu=0,sigma = sqrt(b_chi[m]/a_chi[m])) -
-  #   stevemisc::pst(-eps_cross[m],df=2*a_chi[m],mu=0,sigma = sqrt(b_chi[m]/a_chi[m])) )
-  inv_pow_m <- 1/(p_m*frac_res)
+  inv_pow_Gm <- 1/p_m^(pow_tempering)
+  inv_pow_Lm <- M^(pow_tempering==0)*inv_pow_Gm
   
-  inv_pow_Lm <- inv_pow_Gm <- list()
-  prob_Lh = matrix(NA,M,K)
-  # for(m in 1:M){prob_Lh[m,] = 1-alpha[m]^(1:K)/((1+alpha[m])^(1:K))}
-  for(m in 1:M){
-    e_val = qnorm(0.75,sd=sqrt(var_spike[m]))
-    # e_val = qnorm(0.9,sd=sqrt(var_spike[m]))
-    prob_N = 2*pnorm(-e_val,sd=sqrt(var_spike[m]))
-    prob_T = 2*stevemisc::pst(-e_val,df=2*a_chi[m],mu=0,sigma = sqrt(b_chi[m]/a_chi[m]))
-    # prob_Gh = (1-alpha_loc[m]^(1:K_Gm[m])/((1+alpha_loc[m])^(1:K_Gm[m])))
-    prob_Gh = rep(1-alpha_loc[m]/((1+alpha_loc[m])),K_Gm[m])
-    inv_pow_Gm[[m]] = 1 - (prob_T*rep(1,K_Gm[m]) + (prob_N-prob_T)*prob_Gh)
-    # inv_pow_Lm[[m]] = 1 - (prob_T*rep(1,K) + (prob_N-prob_T)*
-    #   (1-apply((prob_Lh-1)/prob_Lh,2,sum))*apply(prob_Lh,2,prod) )
-    inv_pow_Gm[[m]] = 1/(inv_pow_Gm[[m]] * p_m[m])
+  if(T){
+    inv_pow_Gm0 <- inv_pow_Gm
+    inv_pow_Lm0 <- inv_pow_Lm
+    if(pow_tempering==0){
+      inv_pow_Gm <- rep(1,M)
+      inv_pow_Lm <- inv_pow_Gm
+    } else {
+      prob_m = sapply(1:M, function(m)
+        2*stevemisc::pst(-qnorm(0.75,sd=sqrt(var_spike[m])),df=2*a_chi[m],
+                         mu=0,sigma=sqrt(b_chi[m]/a_chi[m])))
+      inv_pow_Gm <- 1/((1-prob_m)*p_m)
+      inv_pow_Lm <- M*inv_pow_Gm
+    }
   }
   
-  # browser()
-  # browser()
-  
-  # y1=1/(p_m^(2/3))
-  # y2=inv_pow_m
-  # y3=1/(p_m^(1/2))
-  # plot(1/p_m,y1,ylim=c(min(y1,y2,y3),max(y1,y2,y3)))
-  # points(1/p_m,y2,col='red')
-  # points(1/p_m,y3,col='green')
-  # 
-  # browser()
-  # browser()
-  
+  # Rescaling CUSP concentration
+  alpha_L = alpha_L / sqrt(M)
+  alpha_G = alpha_G / sqrt(M)
+    
   # ------ Latent Utilities & Missing Data --------------------------------------------------------
   
   # Check presence of NA in omics data
@@ -257,7 +228,7 @@ gibbs_jafar <- function(X_m, y=NULL, yBinary=F, K0=NULL, K0_m=NULL,
     }
     eta <- fact_new$eta
     phi_m <- fact_new$phi_m
-
+    
     # 5: Latent indicators -----------------------------------------------------
 
     ## 5.1: Shared Component ---------------------------------------------------
@@ -273,10 +244,8 @@ gibbs_jafar <- function(X_m, y=NULL, yBinary=F, K0=NULL, K0_m=NULL,
         rep(lgamma(0.5*p_m[m]+a_chi[m]) - lgamma(a_chi[m]) - 0.5*p_m[m]*log(2*pi*b_chi[m]),K)
       
       # Likelihood Tempering Power
-      # logP_Spikes[m,] <- logP_Spikes[m,] * inv_pow_m[m] * M
-      # logP_Slabs[m,] <- logP_Slabs[m,] * inv_pow_m[m] * M 
-      logP_Spikes[m,] <- logP_Spikes[m,] * inv_pow_Gm[[m]][1:K] * M
-      logP_Slabs[m,] <- logP_Slabs[m,] * inv_pow_Gm[[m]][1:K] * M 
+      logP_Spikes[m,] <- logP_Spikes[m,] * inv_pow_Lm[m]
+      logP_Slabs[m,] <- logP_Slabs[m,] * inv_pow_Lm[m]
       
       logP_diff[m,] <- logP_Slabs[m,] - logP_Spikes[m,]
     }
@@ -312,10 +281,8 @@ gibbs_jafar <- function(X_m, y=NULL, yBinary=F, K0=NULL, K0_m=NULL,
           rep(lgamma(0.5*p_m[m]+a_chi[m]) - lgamma(a_chi[m]) - 0.5*p_m[m]*log(2*pi*b_chi[m]),K_Gm[m])
 
         # Likelihood Tempering
-        # logP_spike <- logP_spike * inv_pow_m[m]
-        # logP_slab <- logP_slab * inv_pow_m[m]
-        logP_spike <- logP_spike * inv_pow_Gm[[m]][1:K_Gm[m]]
-        logP_slab <- logP_slab * inv_pow_Gm[[m]][1:K_Gm[m]]
+        logP_spike <- logP_spike * inv_pow_Gm[m]
+        logP_slab <- logP_slab * inv_pow_Gm[m]
         
         delta_Gm[[m]] <- update_cusp(K_Gm[m],logP_spike,logP_slab,w_m[[m]])
       }
@@ -369,8 +336,7 @@ gibbs_jafar <- function(X_m, y=NULL, yBinary=F, K0=NULL, K0_m=NULL,
       count_eq <- colSums(as.matrix(delta_Lm[m,] == matrix(1:K,K,K,byrow=T)))
       count_gr <- rev(cumsum(rev(c(count_eq[-1],0))))
 
-      # rho_m[m,] <- c(rbeta(K-1, shape1 = p_m[m]+count_eq[-K], shape2 = alpha[m]+count_gr[-K]),1.)
-      rho_m[m,] <- c(rbeta(K-1, shape1 = 1+count_eq[-K], shape2 = alpha[m]+count_gr[-K]),1.)
+      rho_m[m,] <- c(rbeta(K-1, shape1 = 1+count_eq[-K], shape2 = alpha_L[m]+count_gr[-K]),1.)
       pi_m[m,]  <- rho_m[m,]*c(1,cumprod(1-rho_m[m,-K]))
     }
 
@@ -379,8 +345,7 @@ gibbs_jafar <- function(X_m, y=NULL, yBinary=F, K0=NULL, K0_m=NULL,
       count_eq <- colSums(as.matrix(delta_Gm[[m]] == t(c(1:K_Gm[m])*matrix(1,K_Gm[m],K_Gm[m]))))
       count_gr <- rev(cumsum(rev(c(count_eq[-1],0))))
 
-      # nu_m[[m]] <- c(rbeta(K_Gm[m]-1, shape1 = p_m[m]+count_eq[-K_Gm[m]], shape2 = alpha_loc[m]+count_gr[-K_Gm[m]]),1.)
-      nu_m[[m]] <- c(rbeta(K_Gm[m]-1, shape1 = 1+count_eq[-K_Gm[m]], shape2 = alpha_loc[m]+count_gr[-K_Gm[m]]),1.)
+      nu_m[[m]] <- c(rbeta(K_Gm[m]-1, shape1 = 1+count_eq[-K_Gm[m]], shape2 = alpha_G[m]+count_gr[-K_Gm[m]]),1.)
       w_m[[m]]  <- nu_m[[m]]*c(1,cumprod(1-nu_m[[m]][-K_Gm[m]]))
     }
     
@@ -412,25 +377,21 @@ gibbs_jafar <- function(X_m, y=NULL, yBinary=F, K0=NULL, K0_m=NULL,
     }
     
     if(is_supervised){
-      # psi   <- rep(1./var_spike_y,K)
-      # psi_m <- lapply(1:M, function(m) rep(1./var_spike_y,K_Gm[m]))
-      # 
-      # psi0 <- rgamma(1,shape=a_theta+0.5*sum(zeta_all),rate=1) *
-      #   1./(b_theta + 0.5*sum(Theta_all^2*zeta_all))
-      # 
-      # psi[active_T] <- psi0
-      # for(m in 1:M){
-      #   psi_m[[m]][active_Tm[[m]]] <- psi0
-      # }
-      psi0 <- rgamma(1,shape=a_theta+0.5*(K+sum(K_Gm)),rate=1) *
-        1./(b_theta + 0.5*sum(Theta_all^2))
-      psi   <- rep(psi0,K)
-      psi_m <- lapply(1:M, function(m) rep(psi0,K_Gm[m]))
+      psi   <- rep(1./var_spike_y,K)
+      psi_m <- lapply(1:M, function(m) rep(1./var_spike_y,K_Gm[m]))
+
+      psi0 <- rgamma(1,shape=a_theta+0.5*sum(zeta_all),rate=1) *
+        1./(b_theta + 0.5*sum(Theta_all^2*zeta_all))
+
+      psi[active_T] <- psi0
+      for(m in 1:M){
+        psi_m[[m]][active_Tm[[m]]] <- psi0
+      }
     }
 
     # 8: Adaptation ------------------------------------------------------------
 
-    if((t>t0_adapt) & (runif(1) < exp(t0 + t1*t))){
+    if((t>t0_adapt) & (t<nBurnIn) & (runif(1) < exp(t0 + t1*t))){
 
       ## 8.a K -----------------------------------------------------------------
 
@@ -447,6 +408,12 @@ gibbs_jafar <- function(X_m, y=NULL, yBinary=F, K0=NULL, K0_m=NULL,
       K_eff <- length(active_J)
       
       if(K_eff < K-1){
+        
+        # TODO: check
+        if(K_eff==0){
+          K_eff = 1
+          active_J = c(1)
+        }
 
         K <- K_eff + 1
 
@@ -475,7 +442,7 @@ gibbs_jafar <- function(X_m, y=NULL, yBinary=F, K0=NULL, K0_m=NULL,
           Lambda_m[[m]] <- cbind(Lambda_m[[m]],sqrt(var_spike[m])*rnorm(p_m[m]))
         }
         delta_Lm <- cbind(delta_Lm,rep(1,M))
-        rho_m    <- cbind(rho_m[,-(K-1)],rbeta(1,shape1=1,shape2=alpha),rep(1,M))
+        rho_m    <- cbind(rho_m[,-(K-1)],rbeta(1,shape1=1,shape2=alpha_L),rep(1,M))
         pi_m     <- rho_m * cbind(rep(1,M),t(apply(1-rho_m[,-K],1,cumprod)))
         chi_m    <- cbind(chi_m,1./var_spike)
         
@@ -527,7 +494,7 @@ gibbs_jafar <- function(X_m, y=NULL, yBinary=F, K0=NULL, K0_m=NULL,
           phi_m[[m]]   <- cbind(phi_m[[m]],rnorm(n))
 
           Gamma_m[[m]] <- cbind(Gamma_m[[m]],sqrt(var_spike[m])*rnorm(p_m[m]))
-          nu_m[[m]]    <- c(nu_m[[m]][-(K_Gm[m]-1)],rbeta(1,shape1=1,shape2=alpha_loc[m]),1.)
+          nu_m[[m]]    <- c(nu_m[[m]][-(K_Gm[m]-1)],rbeta(1,shape1=1,shape2=alpha_G[m]),1.)
           w_m[[m]]     <- nu_m[[m]]*c(1,cumprod(1-nu_m[[m]][-K_Gm[m]]))
           tau_m[[m]]   <- c(tau_m[[m]],1./var_spike[m])
           
@@ -643,7 +610,7 @@ gibbs_jafar <- function(X_m, y=NULL, yBinary=F, K0=NULL, K0_m=NULL,
   extra_params = list(model=paste0('jafar_',which_prior),
                       rescale_pred=rescale_pred, K0=K0, K0_m=K0_m, 
                       nBurnIn=nBurnIn, nMCMC=nMCMC, nThin=nThin,
-                      pow_rescale=pow_rescale)
+                      pow_tempering=pow_tempering)
   hyperparams = c(extra_params, hyperparams)
   
   output$hyper_param=hyperparams
