@@ -1,0 +1,8 @@
+CXX_STD = CXX17
+
+PKG_CPPFLAGS = -DARMA_USE_CURRENT
+
+RCPP_PAR_DIR = $(shell "${R_HOME}/bin/Rscript" -e "cat(system.file('lib', package='RcppParallel'))")
+
+PKG_LIBS = -L"$(RCPP_PAR_DIR)" -Wl,-rpath,"$(RCPP_PAR_DIR)" -ltbb -ltbbmalloc \
+           $(LAPACK_LIBS) $(BLAS_LIBS) $(FLIBS)

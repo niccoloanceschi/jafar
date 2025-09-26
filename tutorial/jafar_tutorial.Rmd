@@ -1,211 +1,310 @@
 
-```{r}
+---
+title: "Tutorial for <code>jafar</code>"
+output: html_document
+editor_options: 
+  markdown: 
+    wrap: 72
+---
+
+This tutorial introduces the $\texttt{R}$ package $\texttt{jafar}$, which implements the methodologies described in Anceschi et al. (2025).
+The package provides two approaches for supervised Bayesian factor modeling in the context of multi-view data integration:
+
+- **Joint Factor Regression ($\texttt{jfr}$):** a baseline model that captures the combined variation across multiple views using a single set of latent factors.
+- **Joint Additive Factor Regression ($\texttt{jafar}$):** a more refined model that explicitly decomposes variation into shared and view-specific components. Isolating variation unique to each data modality -- whether genuine signal or measurement artifact -- is particularly advantageous in high-dimensional settings.
+
+Both models leverage extensions of the $\texttt{cusp}$ prior (Legramanti et al., 2020), learning adaptively the number of factors in a fully Bayesian way.
+The package implements independent $\texttt{cusp}$ priors ($\texttt{i-cusp}$) for $\texttt{jfr}$ and dependent $\texttt{cusp}$ priors ($\texttt{d-cusp}$) for $\texttt{jafar}$.
+
+In this tutorial we focus on $\texttt{jafar}$, for ease of exposition.
+Usage $\texttt{jfr}$ is completely analogous, simply replacing the function $\texttt{gibbs_jafar}$ with $\texttt{gibbs_jfr}$.
+
+# Initial Imports
+
+We begin by loading the required packages, including the R package
+$\texttt{jafar}$ that we developed.
+
+```{r, message=FALSE, warning=FALSE}
 rm(list = ls())
-```
-
-# Imports
-
-```{r}
-# source code
-library(truncnorm)
-library(Hmisc)
-library(stats)
-library(caret)
-library(Rcpp)
-# postprocessing
-library(infinitefactor)
-# plots
-library(knitr)
+library(jafar)
 library(rstudioapi)
+library(knitr)
 library(ggplot2)
-library(latex2exp)
-library(reshape2)
-library(scales)
-library(fields)
-# bsfp predictions
-library(svMisc)
-library(MASS)
 ```
 
-```{r setup}
-# set working directory
-working_dir = dirname(getSourceEditorContext()$path)
-opts_knit$set(root.dir = working_dir)
-```
+# Set Working Directory
 
-# Source Code
+Set the working directory and create a sub-folder for results.
+Modify $\texttt{output_dir}$ if you want to save results elsewhere.
 
 ```{r}
-# Import source code 
-# TODO: replace 'library(jafar)'
-source_dir = paste0(dirname(dirname(getSourceEditorContext()$path)),'/R')
-
-file_list = c('JAFAR_D-CUSP_gibbs_sampler.R','JAFAR_D-CUSP_initialization.R','JAFAR_D-CUSP_plots.R',
-              'JAFAR_D-CUSP_postprocessing.R','JAFAR_D-CUSP_predictions.R','JAFAR_D-CUSP_updates.R',
-              'JAFAR_D-CUSP_preprocessing.R')
-
-for(source_file in file_list){
-  source(file.path(source_dir, source_file))
-}
-
-compiled_updates = F
-if(compiled_updates){
-  source_dir = paste0(dirname(dirname(getSourceEditorContext()$path)),'/source')
-  sourceCpp(file.path(source_dir, 'JAFAR_D-CUSP_updates.cpp'))
-}
+output_dir = file.path(dirname(getSourceEditorContext()$path), 'results') # <- modify to save in a different location
+dir.create(output_dir, showWarnings = FALSE)
 ```
 
-# Import Data
+# Import Tutorial Dataset
+
+The input data $\texttt{X_m}$ should be structured as a list of length $\texttt{M}$, where:
+
+- $\texttt{M}$ is the number of views:
+- $\texttt{n}$ is the number of samples
+- $\texttt{p_m}$ is a vecotr of $\texttt{M}$ integers, where $\texttt{p_m[m]}$ is the number of features in view $\texttt{m}$.
+- The m-th element of $\texttt{X_m}$ is an $\texttt{n x p_m[m]}$ matrix.
+- The response variable $\texttt{y}$ is a vector of length $\texttt{n}$.
+- Test data must follow the same structure as the training data.
 
 ```{r}
-# Import tutorial data
-data_dir <- dirname(getSourceEditorContext()$path)
+# data("Data")   # loads the dataset
+Data <- readRDS('~/Documents/GitHub/jafar_paper/data/Sec3_Simulations/Simulated_data_n200_s94.rds')
+```
 
-Data <- readRDS(file.path(data_dir,"tutorial_data.rds"))
-
+```{r}
 M <- length(Data$X_m)
 p_m <- sapply(Data$X_m,ncol)
-n <- sapply(Data$X_m,nrow)[1]
-nTest <- sapply(Data$X_m_test,nrow)[1]
+n <- nrow(Data$X_m[[1]])
+nTest <- nrow(Data$X_m_test[[1]])
+
+summary_df <- rbind(data.frame(Element="Train Samples", Dimension=n),
+                    data.frame(Element="Test Samples", Dimension=nTest),
+                    data.frame(Element=paste0("View ",1:M), Dimension=p_m))
+knitr::kable(summary_df, caption="Dimensionality Summary")
 ```
 
 # Preprocessing Data
 
+$\texttt{jafar}$ leverages the $\texttt{cusp}$ construction in the priors for the loading matrices.
+To follow recommended practice for applying $\texttt{cusp}$, we standardize all features and responses to zero mean and unit variance.
+Our code allow to further preprocess the multiview features via the cdf transform (use only if the data deviate from Gaussianity).
+For continuous $\texttt{X_m}$, this coincides with running a Copula factor model.
+
 ```{r}
-# preprocess
-copula = F
-preprocessed_X <- jafar_preprocess_X(Data$X_m,Z_m_test=Data$X_m_test,copula=copula)
-Z_m <- preprocessed_X$Z_m
-Z_m_test <- preprocessed_X$Z_m_test
+preprocessed_X <- preprocess_X(Data$X_m,X_m_test=Data$X_m_test,copula=F)
+X_m <- preprocessed_X$X_m
+X_m_test <- preprocessed_X$X_m_test
 
-convert_y_binary = T
-if(convert_y_binary){
-  cens_thr <- quantile(Data$yTrain,0.65)
-  Data$yTrain <- 1*(Data$yTrain > cens_thr)
-  Data$yTest  <- 1*(Data$yTest > cens_thr)
-}
+preprocessed_y <- preprocess_y(Data$yTrain,yTest=Data$yTest)
 
-binary_y=as.logical(min(Data$yTrain%%1==0))
+y <- preprocessed_y$yTrain
+yTest <- preprocessed_y$yTest
+```
 
-if(!binary_y){
-  preprocessed_y <- jafar_preprocess_y(Data$yTrain,yTest=Data$yTest)
-  yTrain <- preprocessed_y$yTrain
-  yTest <- preprocessed_y$yTest
-} else {
-  yTrain <- Data$yTrain
-  yTest <- Data$yTest
-}
+For visual inspection, features in each view can be reordered by hierarchical clustering
+
+```{r}
+reordered_X <- features_reorder_HC(Data$X_m,X_m_test=Data$X_m_test)
+X_m <- reordered_X$X_m
+X_m_test <- reordered_X$X_m_test
 ```
 
 # MCMC hyper-params
 
-```{r}
-# mcmc params
+$\texttt{jafar}$ requires setting different parameters to be used in the samplers.
+These include MCMC total number of samples, burn-in, thinning.
+The underlying CUSPs requires conservative upper bounds on the number of factor.
 
+- For $\texttt{jfr}$, $\texttt{K0}$ is the upper bound to the total number of factors. 
+  - If unspecified, $\texttt{K0}$ is set to $\text{floor}(3\cdot\log(\text{sum}(p_m)))$.
+- For $\texttt{jafar}$, $\texttt{K0}$ is the upper bound to the number of shared factors, while $\texttt{K0_m}$ is a vector of length $\texttt{M}$ giving the upper bounds to the number of view-specific factors in each view.
+  - If unspecified, $\texttt{K0}$ is set to $\text{floor}(3\cdot\log(\text{max}(p_m)))$
+  - If unspecified, $\texttt{K0_m[m]}$ is set to $\text{floor}(3\cdot\log(p_m[m]))$.
+
+The prior entails additional hyperparameters, detailed in the documentation of the function $\texttt{jafar_set_hyperparameters}$.
+They are provided via the input list $\texttt{hyperparams}$, which we use here to set the random seed.
+The remaining hyperparameters are set to their the default values, which are broadly applicable and work well across a variety of scenarios.
+We refer to the main manuscript for further guidance and intuition on their roles.
+
+```{r}
 nMCMC = 1000
 nBurnIn = 500
 nThin = 10
 
-mcmc_seed=123
+mcmc_seed=1234
 
-Kmax = 30
-Kmax_m = rep(20,M)
+K0 = 25
+K0_m = rep(20,M)
 ```
 
-# Run Gibbs Sampler
+# 1. Unsupervised $\texttt{jafar}$
 
-```{r}
-ris_MCMC <- gibbs_JAFAR_CUSP(yTrain, Z_m, n, M, p_m, seed = mcmc_seed,
-                             nMCMC=nMCMC, nBurnIn=nBurnIn, nThin=nThin, 
-                             Kmax=Kmax, Kmax_m=Kmax_m,binary_y=binary_y) 
+We first run $\texttt{jafar}$ in an unsupervised setting (simply by not including the response in the input).
+This corresponds to assuming a joint additive factor model with shared and specific components
+$$ X_{m i} = \mu_m+ \Lambda_m \eta_i + \Gamma_m \phi_{m i} + \epsilon_{m i}$$
+For each $i=1,\dots,n$ and $m=1,\dots,M$.
+Here, $K$ is the number of shared factors and $\{K_m\}_{m=1}^M$ are the number of specific factors, while:
+
+- $X_{m i} \in \Re^{p_m}$
+- $\mu_m \in \Re^{p_m}$
+- $\Lambda_m \in \Re^{p_m \times K}$
+- $\eta_i \in \Re^{K}$
+- $\Gamma_m \in \Re^{p_m \times K_m}$
+- $\phi_{m i} \in \Re^{K_m}$
+- $\epsilon_{m i} \sim \mathcal{N}_{K_m}(0,\Sigma_m)$
+- $\Sigma_m = \text{diag}(\{\sigma_{mj}^2\}_{j=1}^{p_m}$
+
+```{r, cache=TRUE}
+mcmc_unsupervised <- gibbs_jafar(X_m, K0=K0, K0_m=K0_m,
+                             tMCMC=nMCMC, tBurnIn=nBurnIn, tThin=nThin,
+                             hyperparams = list(seed = mcmc_seed))
+```
+
+$\texttt{jafar}$ offers different visualization to asses its performance.
+Here we focus on number of factors and induced covariance.
+
+## Number of factors
+
+$K$ and $\{K_m\}_{m=1}^M$ are learned adaptively as part of the inferential procedure.
+Inspecting the evolution of the inferred ranks can help understand if the provided upper bounds were large enough.
+This can be done via built-in plotting fuctions in the \texttt{jafar} package.
+The graphics are always save in the provided output path. 
+
+```{r, message=FALSE, results='hide'}
+plot_n_factors(mcmc_unsupervised,out_path=output_dir)
+```
+
+```{r, out.width=600, out.height=350}
+knitr::include_graphics(file.path(output_dir,'n_factors_shared.pdf'))
+```
+
+```{r, out.width=600, out.height=350}
+knitr::include_graphics(file.path(output_dir,'n_factor_specific.pdf'))
+```
+
+## Correlations Matrices
+
+$\texttt{jafar}$ always report the posterior means of the with-in view covariance matrices 
+$$ \Lambda_m\Lambda_m^T \!\!\,\, +  \Gamma_m\Gamma_m^T + \Sigma_m \!\!\,\, $$
+
+Their difference from the empirical ones can help asses how well the decomposition is performing.
+Built-in functions include visual representation facilitating this comparison.
+
+```{r, message=FALSE, results='hide'}
+plot_correlations(mcmc_unsupervised, X_m, out_path=output_dir)
+```
+
+```{r, out.width=600, out.height=700}
+knitr::include_graphics(file.path(output_dir,'cor_matrices.png'))
+```
+
+# 2. Supervised $\texttt{jafar}$ - Continous Response
+
+Secondly, we fit the supervised version of $\texttt{jafar}$, now including the response $y_i \in Re$.
+This entails extending the model above as
+$$ X_{m i} = \mu_m+ \Lambda_m \eta_i + \Gamma_m \phi_{m i} + \epsilon_{m i} \\
+  \quad\;\, y_{ i} = \mu_y + \theta^\top \eta_i + \textstyle{\sum_{m}}\theta_m^\top \phi_{m i} + e_{ i} \\$$
+
+where 
+- $\mu_y \in \Re$
+- $\theta \in \Re^{K}$
+- $\theta_m \in \Re^{K_m}$
+- $e_{ i} \sim \mathcal{N}(0,\sigma_y^2)$
+
+```{r, cache=TRUE}
+mcmc_supervised <- gibbs_jafar(X_m, y=y, K0=K0, K0_m=K0_m,
+                             tMCMC=nMCMC, tBurnIn=nBurnIn, tThin=nThin,
+                             hyperparams = list(seed = mcmc_seed))
 ```
 
 ## Response Predicitions 
 
-```{r}
-y_train_pred <- y_pred_JAFAR(Z_m,ris_MCMC)
-y_test_pred <- y_pred_JAFAR(Z_m_test,ris_MCMC)
-```
-
-## Induced Regression Coefficients
+With this, we can compute response predictions and assess predictive performances.
+Expected values and other distributional properties of $y_i \mid \{X_{m i}\}_m$ can be esaily obtained leveraging the latent representation
+$$ \mathbf{E}[\,y_i \mid \{X_{m i}\}_m \,] =  \mathbf{E}\big[\, \mathbf{E}[\,y_i \mid \eta_i, \{\phi_{m i}\}_m \,] \mid \{X_{m i}\}_m  \big]$$
+This holds both for in-sample and out-of-sample observations.
 
 ```{r}
-inferred_Coeff <- coeff_JAFAR(ris_MCMC)
+y_pred <- predict_y(X_m,mcmc_supervised)
 ```
 
-## Postprocessing of Shared Component
+Built-in functions allow to visualize predicted values against the truth.
+
+```{r, message=FALSE, results='hide'}
+plot_predictions(y_pred,y,mcmc_supervised,out_path=output_dir)
+```
+
+```{r, out.width=600, out.height=450}
+knitr::include_graphics(file.path(output_dir,'predictions.pdf'))
+```
+
+## Postprocessing Against Rotational Ambiguity
+
+Interpreting the latent factors requires first solving rotational ambiguity.
+
+To solve this, $\texttt{jafar}$ implement an extension of $\texttt{MatchAlign}$ (cite) to retain the multiview structure in the shared component of the model.
+A single post-processing routine implement this, jointly with regular $\texttt{MatchAlign}$ on each specific component.
 
 ```{r}
-rotated_variables <- postprocess_JAFAR(ris_MCMC)
+mcmc_supervised <- multiviewMatchAlign(mcmc_supervised)
 ```
 
-# Visualizing Results
+Built-in function allows to visualize the resulting loadings, facilitating interpretation of the latent directions of variation.
 
 ```{r}
-output_dir = dirname(getSourceEditorContext()$path)
-dir.create(file.path(output_dir, 'results'), showWarnings = FALSE)
-output_dir = file.path(output_dir, 'results')
+plot_loadings(mcmc_supervised,out_path=output_dir)
 ```
 
-## Plot n. of factors
+```{r, out.width=600, out.height=400}
+knitr::include_graphics(file.path(output_dir,'shared_loadings.pdf'))
+```
+
+```{r, out.width=600, out.height=400}
+knitr::include_graphics(file.path(output_dir,'specific_loadings.pdf'))
+```
+
+# 3. Supervised $\texttt{jafar}$ - Binary Response
+
+Finally, we show how to fitting $\texttt{jafar}$ for binary responses.
+We first artificially create binary outcomes for the tutorial data.
 
 ```{r}
-plot_n_fact_shared(ris_MCMC,out_folder=output_dir)
-plot_n_fact_specific(ris_MCMC,out_folder=output_dir)
+# convert y to binary
+cens_thr <- quantile(Data$yTrain,0.65)
+y01 <- 1*(Data$yTrain > cens_thr)
+yTest01  <- 1*(Data$yTest > cens_thr)
 ```
 
-## Plot Correlations Matrices
+The binary version is selected by specifying $\texttt{yBinary=TRUE}$ in the input of the Gibbs sampler.
+In such a case, $\texttt{jafar}$ assume a probit link to model the response part.
+$$y_i \sim \mathcal{B}ernoulli\big( \Phi(\mu_y+\theta^\top \eta_i + \textstyle{\sum_{m}}\theta_m^\top \phi_{m i}) \big)$$
+where $\Phi(\cdot)$ is the cumulative distribution function of the standard normal.
+
+```{r, cache=TRUE}
+mcmc_binary <- gibbs_jafar(X_m, y=y01, yBinary=TRUE, K0=K0, K0_m=K0_m,
+                             tMCMC=nMCMC, tBurnIn=nBurnIn, tThin=nThin,
+                             hyperparams = list(seed = mcmc_seed))
+```
+
+## Response Predicitions 
+
+Once again, we can compute predictions and visually assess the associated performances.
+Predictions samples now correspond to the linear predictors $\theta^\top \eta_i + \textstyle{\sum_{m}}\theta_m^\top \phi_{m i}$ under the probit formulations. 
 
 ```{r}
-plot_cor_jafar(ris_MCMC,Z_m, out_folder=output_dir)
+y01_pred <- predict_y(X_m,mcmc_binary)
 ```
 
-## Plot Response Predictions
+As before, \texttt{jafar} allows to visualize predicted values against the truth.
 
-```{r}
-plot_pred_jafar(y_train_pred,yTrain,s2y_inv=ris_MCMC$s2_inv,is_binary=binary_y,out_folder=output_dir,filename='Train')
-plot_pred_jafar(y_test_pred,yTest,s2y_inv=ris_MCMC$s2_inv,is_binary=binary_y,out_folder=output_dir,filename='Test')
+```{r, message=FALSE, results='hide'}
+plot_predictions(y01_pred,y01,mcmc_binary,out_path=output_dir,out_name='binary_predicitions')
 ```
 
-## Plot Coefficients
-
-```{r}
-plot_coeff_jafar(inferred_Coeff,out_folder=output_dir)
+```{r, out.width=600, out.height=450}
+knitr::include_graphics(file.path(output_dir,'binary_predicitions.pdf'))
 ```
 
-## Plot Rotated Loadings
+## Induced Coefficients
 
-```{r}
-plot_loadings_jafar(rotated_variables,out_folder=output_dir)
+\texttt{jafar} further allows to inspect predictive power across features and views by visualizing the induced regression coefficients $\{\beta_m \in \Re^{p_m}\}_m$ for $y_i \mid \{X_m\}_m$.
+This representation is obtained by marginalizing out all latent factors, so that
+$y_{ i} \sim \mathcal{N}\big(\mu_y+\textstyle{\sum_{m}}\beta_m^\top X_{m i},\sigma_y^2 \big)$
+for continuous responses and $y_i \sim \mathcal{B}ernoulli\big( \Phi(\mu_y+\textstyle{\sum_{m}}\beta_m^\top X_{m i}) \big)$ for binary ones.
+Such regression coefficients are automatically returned when computing predictions via $\texttt{predict_y}$.
+
+```{r, message=FALSE, results='hide'}
+plot_coefficients(y01_pred)
 ```
 
-```{r}
-
+```{r, out.width=600, out.height=350}
+knitr::include_graphics(file.path(output_dir,'coefficients.pdf'))
 ```
-
-```{r}
-
-```
-
-```{r}
-
-```
-
-```{r}
-
-```
-
-```{r}
-
-```
-
-```{r}
-
-```
-
-```{r}
-
-```
-
-
 

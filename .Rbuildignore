@@ -1,2 +1,6 @@
 ^jafar\.Rproj$
 ^\.Rproj\.user$
+^jafar/tutorial/jafar_tutorial_cache/
+^jafar/tutorial/.*_files/
+^doc$
+^Meta$

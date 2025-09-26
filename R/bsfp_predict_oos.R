@@ -1,8 +1,4 @@
 
-#' Original function `data.rearrange` from the GitHub repo BSFP
-#'
-#' @author Jun Young Park (2020)
-#' 
 data.rearrange=function(data,rmt=F,sigma=NULL){
   out=NULL
   p=nrow(data)
@@ -31,11 +27,13 @@ data.rearrange=function(data,rmt=F,sigma=NULL){
   return(list(out=out, nrows=m.vec, ncols=n.vec, sigma.mat=sigma))
 }
 
-# Modified version of the function `bsfp.predict` from the GitHub repo BSFP for coherent out-of-sample predictions
+#' Out-of-sample prediction for BSFP
+#'
+#' Modified version of the function \code{bsfp.predict} from the GitHub repo BSFP for out-of-sample predictions.
 #'
 #' @param bsfp.fit Results from fitting \code{bsfp} on training data.
 #' @param test_data Matrix-list dataset of held-out test data.
-#' @param Y_test Column vector with outcome on test samples or \code{NULL}
+#' @param response_type Continuous or binary response. Must be one of 'continuous' (deafult) or 'binary'.
 #' @param model_params May be \code{NULL} if \code{model_params=NULL} in \code{bsfp} fit.
 #' Otherwise, specify as \code{(error_vars, joint_vars, indiv_vars, beta_vars, response_vars)}.
 #' @param nsample Integer specifing number of Gibbs sampling iterations

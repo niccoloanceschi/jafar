@@ -1,4 +1,6 @@
 data
-ris
-generate_data
-.Rproj.user
+inst/doc
+/doc/
+/Meta/
+old_R
+.Rproj.user/
