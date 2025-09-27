@@ -7,7 +7,7 @@
 plot_coefficients(yPred, out_path = "~/Desktop/", out_name = "coefficients")
 }
 \arguments{
-\item{yPred}{Response predictions, output of \code{jafar_pred_y} or \code{jafar_coeff_y}}
+\item{yPred}{Response predictions, output of \code{predict_y} or \code{predict_y_raw}}
 
 \item{out_path}{Output path where the generated plot will be saved (default: "~/Desktop/")}
 

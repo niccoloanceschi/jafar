@@ -14,8 +14,8 @@ plot_correlations(
 \arguments{
 \item{risMCMC}{Posterior samples, output of \code{gibbs_jafar} or \code{gibbs_jfr}}
 
-\item{X_m}{Training set multi-view predictors (optional, default: NULL)
-If NULL, only inferred correlation matrices are visualized
+\item{X_m}{Training set multi-view predictors (optional, default: NULL).
+If NULL, only inferred correlation matrices are visualized.
 If not NULL, the empirical correlation matrices are displayed besides the inferred ones}
 
 \item{out_path}{Output path where the generated plot will be saved (default: "~/Desktop/")}

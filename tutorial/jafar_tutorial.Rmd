@@ -7,17 +7,20 @@ editor_options:
     wrap: 72
 ---
 
-This tutorial introduces the $\texttt{R}$ package $\texttt{jafar}$, which implements the methodologies described in Anceschi et al. (2025).
-The package provides two approaches for supervised Bayesian factor modeling in the context of multi-view data integration:
+This tutorial provides an introduction to the $\texttt{R}$ package $\texttt{jafar}$, which implements the methodologies described in [Anceschi et al. (2025)](https://arxiv.org/abs/2406.00778).
+The package implements two supervised Bayesian factor modeling approaches for multi-view data integration:
 
-- **Joint Factor Regression ($\texttt{jfr}$):** a baseline model that captures the combined variation across multiple views using a single set of latent factors.
-- **Joint Additive Factor Regression ($\texttt{jafar}$):** a more refined model that explicitly decomposes variation into shared and view-specific components. Isolating variation unique to each data modality -- whether genuine signal or measurement artifact -- is particularly advantageous in high-dimensional settings.
+- **Joint Factor Regression ($\texttt{JFR}$):** a baseline model that captures the combined variation across multiple data views using a single set of latent factors.
+- **Joint Additive Factor Regression ($\texttt{JAFAR}$):** a more refined model that explicitly decomposes variation into shared and view-specific components.
 
-Both models leverage extensions of the $\texttt{cusp}$ prior (Legramanti et al., 2020), learning adaptively the number of factors in a fully Bayesian way.
-The package implements independent $\texttt{cusp}$ priors ($\texttt{i-cusp}$) for $\texttt{jfr}$ and dependent $\texttt{cusp}$ priors ($\texttt{d-cusp}$) for $\texttt{jafar}$.
+Isolating variation unique to each data modality—whether genuine signal or measurement artifact—can be particularly advantageous in high-dimensional settings, increasing interpretability and improving scalability.
+$\texttt{JAFAR}$ ensures correct separation of the additive component by placing zero prior mass on configurations with ill-posed allocation of specific factors into the shared component.
 
-In this tutorial we focus on $\texttt{jafar}$, for ease of exposition.
-Usage $\texttt{jfr}$ is completely analogous, simply replacing the function $\texttt{gibbs_jafar}$ with $\texttt{gibbs_jfr}$.
+Both models leverage extensions of the $\texttt{CUSP}$ prior [(Legramanti et al., 2020)](http://academic.oup.com/biomet/article/107/3/745/5847840), learning adaptively the number of factors in a fully Bayesian way.
+The package implements independent $\texttt{CUSP}$ priors ($\texttt{I-CUSP}$) for $\texttt{JFR}$ and dependent $\texttt{CUSP}$ priors ($\texttt{D-CUSP}$) for $\texttt{JAFAR}$.
+
+In this tutorial, we focus on $\texttt{JAFAR}$ for ease of exposition.
+Using $\texttt{JFR}$ is completely analogous, simply replacing the function $\texttt{gibbs_jafar}$ with $\texttt{gibbs_jfr}$.
 
 # Initial Imports
 
@@ -32,26 +35,27 @@ library(knitr)
 library(ggplot2)
 ```
 
-# Set Working Directory
+# Output Pat
 
-Set the working directory and create a sub-folder for results.
+Set the working directory where to save the results.
 Modify $\texttt{output_dir}$ if you want to save results elsewhere.
 
 ```{r}
-output_dir = file.path(dirname(getSourceEditorContext()$path), 'results') # <- modify to save in a different location
+output_dir = file.path(dirname(getSourceEditorContext()$path), 'results')
 dir.create(output_dir, showWarnings = FALSE)
 ```
 
-# Import Tutorial Dataset
+# Data Import 
 
 The input data $\texttt{X_m}$ should be structured as a list of length $\texttt{M}$, where:
 
 - $\texttt{M}$ is the number of views:
 - $\texttt{n}$ is the number of samples
-- $\texttt{p_m}$ is a vecotr of $\texttt{M}$ integers, where $\texttt{p_m[m]}$ is the number of features in view $\texttt{m}$.
+- $\texttt{p_m}$ is a vector of $\texttt{M}$ integers, where $\texttt{p_m[m]}$ is the number of features in view $\texttt{m}$.
 - The m-th element of $\texttt{X_m}$ is an $\texttt{n x p_m[m]}$ matrix.
-- The response variable $\texttt{y}$ is a vector of length $\texttt{n}$.
-- Test data must follow the same structure as the training data.
+
+The response variable $\texttt{y}$ is a vector of length $\texttt{n}$.
+Test data must follow the same structure as the training data.
 
 ```{r}
 # data("Data")   # loads the dataset
@@ -70,11 +74,11 @@ summary_df <- rbind(data.frame(Element="Train Samples", Dimension=n),
 knitr::kable(summary_df, caption="Dimensionality Summary")
 ```
 
-# Preprocessing Data
+# Data Pre-processing
 
-$\texttt{jafar}$ leverages the $\texttt{cusp}$ construction in the priors for the loading matrices.
-To follow recommended practice for applying $\texttt{cusp}$, we standardize all features and responses to zero mean and unit variance.
-Our code allow to further preprocess the multiview features via the cdf transform (use only if the data deviate from Gaussianity).
+$\texttt{JAFAR}$ leverages the $\texttt{CUSP}$ construction in the priors for the loading matrices.
+To follow recommended practice for applying $\texttt{CUSP}$, we standardize all features and responses to zero mean and unit variance.
+The package allows further pre-processing of the multi-view features via the cdf transform (use only if the data deviate from Gaussianity).
 For continuous $\texttt{X_m}$, this coincides with running a Copula factor model.
 
 ```{r}
@@ -88,7 +92,7 @@ y <- preprocessed_y$yTrain
 yTest <- preprocessed_y$yTest
 ```
 
-For visual inspection, features in each view can be reordered by hierarchical clustering
+For better visualization, features in each view can be reordered by hierarchical clustering
 
 ```{r}
 reordered_X <- features_reorder_HC(Data$X_m,X_m_test=Data$X_m_test)
@@ -96,11 +100,11 @@ X_m <- reordered_X$X_m
 X_m_test <- reordered_X$X_m_test
 ```
 
-# MCMC hyper-params
+# MCMC Hyperparameters
 
 $\texttt{jafar}$ requires setting different parameters to be used in the samplers.
 These include MCMC total number of samples, burn-in, thinning.
-The underlying CUSPs requires conservative upper bounds on the number of factor.
+The underlying $\texttt{CUSP}$ structures require conservative upper bounds on the number of factors.
 
 - For $\texttt{jfr}$, $\texttt{K0}$ is the upper bound to the total number of factors. 
   - If unspecified, $\texttt{K0}$ is set to $\text{floor}(3\cdot\log(\text{sum}(p_m)))$.
@@ -109,14 +113,14 @@ The underlying CUSPs requires conservative upper bounds on the number of factor.
   - If unspecified, $\texttt{K0_m[m]}$ is set to $\text{floor}(3\cdot\log(p_m[m]))$.
 
 The prior entails additional hyperparameters, detailed in the documentation of the function $\texttt{jafar_set_hyperparameters}$.
-They are provided via the input list $\texttt{hyperparams}$, which we use here to set the random seed.
-The remaining hyperparameters are set to their the default values, which are broadly applicable and work well across a variety of scenarios.
+They can be specified via the input list $\texttt{hyperparams}$, which we use to set the random seed.
+Here, the remaining hyperparameters are set to their default values, which are broadly applicable and work well across a variety of scenarios.
 We refer to the main manuscript for further guidance and intuition on their roles.
 
 ```{r}
-nMCMC = 1000
-nBurnIn = 500
-nThin = 10
+tMCMC = 1000
+tBurnIn = 500
+tThin = 10
 
 mcmc_seed=1234
 
@@ -124,13 +128,13 @@ K0 = 25
 K0_m = rep(20,M)
 ```
 
-# 1. Unsupervised $\texttt{jafar}$
+# 1. Unsupervised $\texttt{JAFAR}$
 
-We first run $\texttt{jafar}$ in an unsupervised setting (simply by not including the response in the input).
+We first run $\texttt{JAFAR}$ in an unsupervised setting (simply by not including the response in the input).
 This corresponds to assuming a joint additive factor model with shared and specific components
 $$ X_{m i} = \mu_m+ \Lambda_m \eta_i + \Gamma_m \phi_{m i} + \epsilon_{m i}$$
-For each $i=1,\dots,n$ and $m=1,\dots,M$.
-Here, $K$ is the number of shared factors and $\{K_m\}_{m=1}^M$ are the number of specific factors, while:
+for each $i=1,\dots,n$ and $m=1,\dots,M$.
+Here:
 
 - $X_{m i} \in \Re^{p_m}$
 - $\mu_m \in \Re^{p_m}$
@@ -138,24 +142,26 @@ Here, $K$ is the number of shared factors and $\{K_m\}_{m=1}^M$ are the number o
 - $\eta_i \in \Re^{K}$
 - $\Gamma_m \in \Re^{p_m \times K_m}$
 - $\phi_{m i} \in \Re^{K_m}$
-- $\epsilon_{m i} \sim \mathcal{N}_{K_m}(0,\Sigma_m)$
+- $\epsilon_{m i} \sim N_{K_m}(0,\Sigma_m)$
 - $\Sigma_m = \text{diag}(\{\sigma_{mj}^2\}_{j=1}^{p_m}$
+- $K$ is the number of shared factors 
+- $\{K_m\}_{m=1}^M$ are the number of specific factors
 
 ```{r, cache=TRUE}
 mcmc_unsupervised <- gibbs_jafar(X_m, K0=K0, K0_m=K0_m,
-                             tMCMC=nMCMC, tBurnIn=nBurnIn, tThin=nThin,
+                             tMCMC=tMCMC, tBurnIn=tBurnIn, tThin=tThin,
                              hyperparams = list(seed = mcmc_seed))
 ```
 
-$\texttt{jafar}$ offers different visualization to asses its performance.
-Here we focus on number of factors and induced covariance.
+The package offers different visualization functions to assess its performance.
+We first focus on number of factors and induced covariance.
 
-## Number of factors
+## Number of Factors
 
 $K$ and $\{K_m\}_{m=1}^M$ are learned adaptively as part of the inferential procedure.
 Inspecting the evolution of the inferred ranks can help understand if the provided upper bounds were large enough.
-This can be done via built-in plotting fuctions in the \texttt{jafar} package.
-The graphics are always save in the provided output path. 
+This can be done via built-in plotting function \texttt{plot_n_factors} in the \texttt{jafar} package.
+The resulting graphics are always saved in pdf or png format, at the specified path.
 
 ```{r, message=FALSE, results='hide'}
 plot_n_factors(mcmc_unsupervised,out_path=output_dir)
@@ -171,23 +177,23 @@ knitr::include_graphics(file.path(output_dir,'n_factor_specific.pdf'))
 
 ## Correlations Matrices
 
-$\texttt{jafar}$ always report the posterior means of the with-in view covariance matrices 
+The Gibbs sampler always report the posterior means of the with-in view covariance matrices 
 $$ \Lambda_m\Lambda_m^T \!\!\,\, +  \Gamma_m\Gamma_m^T + \Sigma_m \!\!\,\, $$
 
-Their difference from the empirical ones can help asses how well the decomposition is performing.
-Built-in functions include visual representation facilitating this comparison.
+Their difference from the empirical ones can help assess how well the decomposition is performing.
+Built-in functions include visual representation facilitating this comparison, focusing on the associated correlation matrices.
 
 ```{r, message=FALSE, results='hide'}
 plot_correlations(mcmc_unsupervised, X_m, out_path=output_dir)
 ```
 
 ```{r, out.width=600, out.height=700}
-knitr::include_graphics(file.path(output_dir,'cor_matrices.png'))
+knitr::include_graphics(file.path(output_dir,'correlations.png'))
 ```
 
-# 2. Supervised $\texttt{jafar}$ - Continous Response
+# 2. Supervised $\texttt{JAFAR}$ - Continous Response
 
-Secondly, we fit the supervised version of $\texttt{jafar}$, now including the response $y_i \in Re$.
+Secondly, we fit the supervised version of $\texttt{JAFAR}$, now including a response $y_i \in Re$.
 This entails extending the model above as
 $$ X_{m i} = \mu_m+ \Lambda_m \eta_i + \Gamma_m \phi_{m i} + \epsilon_{m i} \\
   \quad\;\, y_{ i} = \mu_y + \theta^\top \eta_i + \textstyle{\sum_{m}}\theta_m^\top \phi_{m i} + e_{ i} \\$$
@@ -195,20 +201,20 @@ $$ X_{m i} = \mu_m+ \Lambda_m \eta_i + \Gamma_m \phi_{m i} + \epsilon_{m i} \\
 where 
 - $\mu_y \in \Re$
 - $\theta \in \Re^{K}$
-- $\theta_m \in \Re^{K_m}$
-- $e_{ i} \sim \mathcal{N}(0,\sigma_y^2)$
+- $\theta_m \in \Re^{K_m} \quad \forall \; m=1,\dots,M$
+- $e_{ i} \sim N(0,\sigma_y^2)$
 
 ```{r, cache=TRUE}
 mcmc_supervised <- gibbs_jafar(X_m, y=y, K0=K0, K0_m=K0_m,
-                             tMCMC=nMCMC, tBurnIn=nBurnIn, tThin=nThin,
+                             tMCMC=tMCMC, tBurnIn=tBurnIn, tThin=tThin,
                              hyperparams = list(seed = mcmc_seed))
 ```
 
 ## Response Predicitions 
 
-With this, we can compute response predictions and assess predictive performances.
-Expected values and other distributional properties of $y_i \mid \{X_{m i}\}_m$ can be esaily obtained leveraging the latent representation
-$$ \mathbf{E}[\,y_i \mid \{X_{m i}\}_m \,] =  \mathbf{E}\big[\, \mathbf{E}[\,y_i \mid \eta_i, \{\phi_{m i}\}_m \,] \mid \{X_{m i}\}_m  \big]$$
+We can then compute response predictions and assess predictive performance.
+Expected values and other distributional properties of $y_i \mid \{X_{m i}\}_m$ can be easily obtained leveraging the latent representation
+$$ \mathbb{E}[\,y_i \mid \{X_{m i}\}_m \,] =  \mathbb{E}\big[\, \mathbb{E}[\,y_i \mid \eta_i, \{\phi_{m i}\}_m \,] \mid \{X_{m i}\}_m  \big]$$
 This holds both for in-sample and out-of-sample observations.
 
 ```{r}
@@ -227,32 +233,43 @@ knitr::include_graphics(file.path(output_dir,'predictions.pdf'))
 
 ## Postprocessing Against Rotational Ambiguity
 
-Interpreting the latent factors requires first solving rotational ambiguity.
+Interpreting the latent factors requires first solving rotational ambiguity, columns switching and sign switching.
+Specifically, for any set of orthogonal matrices $R$ and $R_m$ such that $R R^\top =I_K$ and $R_m R_m^\top =I_{K_m}$, simultaneously modifying loading matrices and latent factors as
+$$\widetilde{\Lambda}_m = {\Lambda}_m R \qquad 
+\widetilde{\Gamma}_m = {\Gamma}_m R_m \\
+\;\;\widetilde{\theta} = {\theta} R \qquad \quad
+\widetilde{\theta}_m = {\theta}_m R_m \\
+\;\, \widetilde{\eta}_i = R^\top \eta_i \qquad
+\widetilde{\phi}_m = R_m^\top {\phi}_m $$
+provide an equivalent representation.
 
-To solve this, $\texttt{jafar}$ implement an extension of $\texttt{MatchAlign}$ (cite) to retain the multiview structure in the shared component of the model.
-A single post-processing routine implement this, jointly with regular $\texttt{MatchAlign}$ on each specific component.
+Posterior samples must thus be aligned in order to compute meaningful Monte Carlo averages of latent variables.
+$\texttt{jafar}$ implements an extension of $\texttt{MatchAlign}$ [(Poworoznek et al., 2025)](https://projecteuclid.org/journals/bayesian-analysis/advance-publication/Efficiently-Resolving-Rotational-Ambiguity-in-Bayesian-Matrix-Sampling-with-Matching/10.1214/25-BA1544.full)
+to account for the multi-view structure in the shared component of the model.
+The specific components can be aligned with regular $\texttt{MatchAlign}$.
+All such post-processing routines are implemented jointly in the function $\texttt{multiviewMatchAlign}$.
 
 ```{r}
 mcmc_supervised <- multiviewMatchAlign(mcmc_supervised)
 ```
 
-Built-in function allows to visualize the resulting loadings, facilitating interpretation of the latent directions of variation.
+Built-in function allows to visualize the resulting loading matrices, facilitating interpretation of the latent directions of variation.
 
 ```{r}
 plot_loadings(mcmc_supervised,out_path=output_dir)
 ```
 
-```{r, out.width=600, out.height=400}
+```{r, out.width=600, out.height=650}
 knitr::include_graphics(file.path(output_dir,'shared_loadings.pdf'))
 ```
 
-```{r, out.width=600, out.height=400}
+```{r, out.width=600, out.height=650}
 knitr::include_graphics(file.path(output_dir,'specific_loadings.pdf'))
 ```
 
-# 3. Supervised $\texttt{jafar}$ - Binary Response
+# 3. Supervised $\texttt{JAFAR}$ - Binary Response
 
-Finally, we show how to fitting $\texttt{jafar}$ for binary responses.
+Finally, we show how to fit $\texttt{JAFAR}$ with binary responses.
 We first artificially create binary outcomes for the tutorial data.
 
 ```{r}
@@ -262,21 +279,22 @@ y01 <- 1*(Data$yTrain > cens_thr)
 yTest01  <- 1*(Data$yTest > cens_thr)
 ```
 
-The binary version is selected by specifying $\texttt{yBinary=TRUE}$ in the input of the Gibbs sampler.
-In such a case, $\texttt{jafar}$ assume a probit link to model the response part.
-$$y_i \sim \mathcal{B}ernoulli\big( \Phi(\mu_y+\theta^\top \eta_i + \textstyle{\sum_{m}}\theta_m^\top \phi_{m i}) \big)$$
+In such a case, $\texttt{JAFAR}$ assumes a probit link to model the response part.
+$$y_i \sim Bernoulli \big( \Phi(\mu_y+\theta^\top \eta_i + \textstyle{\sum_{m}}\theta_m^\top \phi_{m i}) \big)$$
 where $\Phi(\cdot)$ is the cumulative distribution function of the standard normal.
+
+The binary-response version is selected by specifying $\texttt{yBinary=TRUE}$ in the input of the Gibbs sampler.
 
 ```{r, cache=TRUE}
 mcmc_binary <- gibbs_jafar(X_m, y=y01, yBinary=TRUE, K0=K0, K0_m=K0_m,
-                             tMCMC=nMCMC, tBurnIn=nBurnIn, tThin=nThin,
+                             tMCMC=tMCMC, tBurnIn=tBurnIn, tThin=tThin,
                              hyperparams = list(seed = mcmc_seed))
 ```
 
-## Response Predicitions 
+## Response Predicitions
 
-Once again, we can compute predictions and visually assess the associated performances.
-Predictions samples now correspond to the linear predictors $\theta^\top \eta_i + \textstyle{\sum_{m}}\theta_m^\top \phi_{m i}$ under the probit formulations. 
+Once again, we can compute response predictions and visually assess the associated performance.
+Prediction samples now correspond to the linear predictors $\theta^\top \eta_i + \textstyle{\sum_{m}}\theta_m^\top \phi_{m i}$ under the probit formulation. 
 
 ```{r}
 y01_pred <- predict_y(X_m,mcmc_binary)
@@ -285,19 +303,19 @@ y01_pred <- predict_y(X_m,mcmc_binary)
 As before, \texttt{jafar} allows to visualize predicted values against the truth.
 
 ```{r, message=FALSE, results='hide'}
-plot_predictions(y01_pred,y01,mcmc_binary,out_path=output_dir,out_name='binary_predicitions')
+plot_predictions(y01_pred,y01,mcmc_binary,out_path=output_dir,out_name='binary_predictions')
 ```
 
 ```{r, out.width=600, out.height=450}
-knitr::include_graphics(file.path(output_dir,'binary_predicitions.pdf'))
+knitr::include_graphics(file.path(output_dir,'binary_predictions.pdf'))
 ```
 
 ## Induced Coefficients
 
-\texttt{jafar} further allows to inspect predictive power across features and views by visualizing the induced regression coefficients $\{\beta_m \in \Re^{p_m}\}_m$ for $y_i \mid \{X_m\}_m$.
+\texttt{jafar} further allows to inspect predictive power across features and views by visualizing the induced regression coefficients $\{\beta_m \in \Re^{p_m}\}_m$ directly for $y_i \mid \{X_m\}_m$.
 This representation is obtained by marginalizing out all latent factors, so that
-$y_{ i} \sim \mathcal{N}\big(\mu_y+\textstyle{\sum_{m}}\beta_m^\top X_{m i},\sigma_y^2 \big)$
-for continuous responses and $y_i \sim \mathcal{B}ernoulli\big( \Phi(\mu_y+\textstyle{\sum_{m}}\beta_m^\top X_{m i}) \big)$ for binary ones.
+$y_{ i} \sim N\big(\mu_y+\textstyle{\sum_{m}}\beta_m^\top X_{m i},\sigma_y^2 \big)$
+for continuous responses and $y_i \sim Bernoulli \big( \Phi(\mu_y+\textstyle{\sum_{m}}\beta_m^\top X_{m i}) \big)$ for binary ones.
 Such regression coefficients are automatically returned when computing predictions via $\texttt{predict_y}$.
 
 ```{r, message=FALSE, results='hide'}

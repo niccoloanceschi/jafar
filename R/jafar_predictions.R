@@ -111,7 +111,7 @@ predict_y <- function(Xpred,risMCMC,rescale_pred=FALSE){
   
   nPred = unlist(sapply(Xpred,nrow))[1]
   
-  tMCMC = nrow(mcmc_supervised$K_Lm_eff)
+  tMCMC = nrow(risMCMC$K_Lm_eff)
   iter_print <- max(1,tMCMC %/% 10)  
   
   mu_MC  <- matrix(NA,tMCMC,nPred)
@@ -269,7 +269,7 @@ predict_y_raw <- function(Xpred,risMCMC,rescale_pred=FALSE){
   
   nPred = unlist(sapply(Xpred,nrow))[1]
   
-  tMCMC = nrow(mcmc_supervised$K_Lm_eff)
+  tMCMC = nrow(risMCMC$K_Lm_eff)
   iter_print <- max(1,tMCMC %/% 10)  
   
   mu_MC  <- matrix(NA,tMCMC,nPred)
@@ -427,7 +427,7 @@ predict_X <- function(Xpred,risMCMC,rescale_pred=FALSE){
   
   nPred = unlist(sapply(Xpred,nrow))[1]
   
-  tMCMC = nrow(mcmc_supervised$K_Lm_eff)
+  tMCMC = nrow(risMCMC$K_Lm_eff)
   iter_print <- max(1,tMCMC %/% 10)  
   
   Xm_mcmc <- lapply(1:M, function(m) array(NA,c(nPred,p_m[m],tMCMC)))

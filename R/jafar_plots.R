@@ -69,12 +69,12 @@ plot_n_factors <- function(risMCMC,out_path='~/Desktop',
 #'    If NULL, only inferred correlation matrices are visualized.
 #'    If not NULL, the empirical correlation matrices are displayed besides the inferred ones
 #' @param out_path Output path where the generated plot will be saved (default: "~/Desktop/")
-#' @param out_name Output file name (default: "cor_matrices")
+#' @param out_name Output file name (default: "correlations")
 #'
 #' @export
 #'
 plot_correlations <- function(risMCMC,X_m=NULL,out_path='~/Desktop/',
-                              out_name='cor_matrices'){
+                              out_name='correlations'){
   
   M <- length(risMCMC$Cov_m_mean)
   

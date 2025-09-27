@@ -13,7 +13,7 @@ plot_predictions(
 )
 }
 \arguments{
-\item{yPred}{Response predictions, output of \code{jafar_pred_y} or \code{jafar_coeff_y}}
+\item{yPred}{Response predictions, output of \code{predict_y} or \code{predict_y_raw}}
 
 \item{yTrue}{True values of the responses}
 
