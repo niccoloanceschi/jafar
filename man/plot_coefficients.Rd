@@ -14,7 +14,6 @@ plot_coefficients(yPred, out_path = "~/Desktop/", out_name = "coefficients")
 \item{out_name}{Output file name (default: "coefficients")}
 }
 \description{
-Plot induced regression coefficients for \eqn{y \mid \{X_m\}_m = \{x_m\}_m}.
-Such coefficients directly relate the response \code{y} to the observed multi-view predictors \eqn{\{X_m\}_m}.
+Plot induced regression coefficients, directly relating the response \code{y} to the observed multi-view predictors.
 The corresponding representation is obtained by marginalizing out all latent factors.
 }
