@@ -13,7 +13,7 @@ The package implements two supervised Bayesian factor modeling approaches for mu
 - **Joint Factor Regression ($\texttt{JFR}$):** a baseline model that captures the combined variation across multiple data views using a single set of latent factors.
 - **Joint Additive Factor Regression ($\texttt{JAFAR}$):** a more refined model that explicitly decomposes variation into shared and view-specific components.
 
-Isolating variation unique to each data modality—whether genuine signal or measurement artifact—can be particularly advantageous in high-dimensional settings, increasing interpretability and improving scalability.
+Isolating variation unique to each data modality -- whether genuine signal or measurement artifact -- can be particularly advantageous in high-dimensional settings, increasing interpretability and improving scalability.
 $\texttt{JAFAR}$ ensures correct separation of the additive component by placing zero prior mass on configurations with ill-posed allocation of specific factors into the shared component.
 
 Both models leverage extensions of the $\texttt{CUSP}$ prior [(Legramanti et al., 2020)](http://academic.oup.com/biomet/article/107/3/745/5847840), learning adaptively the number of factors in a fully Bayesian way.
