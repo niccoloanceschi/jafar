@@ -20,10 +20,12 @@ Response for out-of-sample observations can optionally be provided as input.
 If so, the corresponding values are rescaled coherently with the training set.
 }
 \note{
-The output list includes:
+The output list contains:
 \itemize{
-\item{\code{preprocess_y}: Transformation applied to ....}
-\item{\code{yTrain}: ...}
-\item{\code{yTest}: ...}
+\item{\code{preprocess_y}: The rescaling transformation applied to the response,
+as returned by \code{preProcess} from the \code{caret} package.
+This object can be used to back-transform the data to the original scale.}
+\item{\code{yTrain}: Rescaled responses for the training set.}
+\item{\code{yTest}: Rescaled responses for the test set (if provided).}
 }
 }

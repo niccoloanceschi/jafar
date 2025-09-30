@@ -24,3 +24,13 @@ Center and rescale, and apply feature-wise cdf transform (optional).
 Multi-view data for out-of-sample observations can optionally be provided as input.
 If so, the corresponding features are rescaled coherently with the training set.
 }
+\note{
+The output list contains:
+\itemize{
+\item{\code{preprocess_X_m}: List of the rescaling transformations applied to the response,
+as returned by \code{preProcess} from the \code{caret} package.
+This object can be used to back-transform the data to the original scale.}
+\item{\code{X_m}: Rescaled multi-view features for the training set.}
+\item{\code{X_m_test}: Rescaled multi-view features for the test set (if provided).}
+}
+}

@@ -23,3 +23,13 @@ Reorder features via hierarchical clustering for better visualization.
 Multi-view data for out-of-sample observations can optionally be provided as input.
 If so, the corresponding features are re-ordered coherently with the training set.
 }
+\note{
+The output list contains:
+\itemize{
+\item{\code{idx_sort_HC_m}: List of features reordering obtained by running hierarchical
+clustering on empirical correlations.
+This object can be used to restore the data to its original order.}
+\item{\code{X_m}: Reordered multi-view features for the training set.}
+\item{\code{X_m_test}: Reordered multi-view features for the test set (if provided).}
+}
+}

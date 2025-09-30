@@ -88,6 +88,15 @@ cdf_transform <- function(X_m,X_m_test=NULL){
 #' 
 #' @return List of pre-processed features and rescaling factors
 #'
+#' @note The output list contains:
+#' \itemize{
+#'   \item{\code{preprocess_X_m}: List of the rescaling transformations applied to the response, 
+#'     as returned by \code{preProcess} from the \code{caret} package. 
+#'     This object can be used to back-transform the data to the original scale.}
+#'   \item{\code{X_m}: Rescaled multi-view features for the training set.}
+#'   \item{\code{X_m_test}: Rescaled multi-view features for the test set (if provided).}
+#' }
+#' 
 #' @export
 #' 
 preprocess_X <- function(X_m,X_m_test=NULL,copula=FALSE){
@@ -158,12 +167,14 @@ preprocess_X <- function(X_m,X_m_test=NULL,copula=FALSE){
 #' 
 #' @return List of pre-processed responses and rescaling transformation
 #' 
-#' @note The output list includes:
+#' @note The output list contains:
 #' \itemize{
-#'    \item{\code{preprocess_y}: Transformation applied to ....}
-#'    \item{\code{yTrain}: ...}
-#'    \item{\code{yTest}: ...}
-#'  }
+#'   \item{\code{preprocess_y}: The rescaling transformation applied to the response, 
+#'     as returned by \code{preProcess} from the \code{caret} package. 
+#'     This object can be used to back-transform the data to the original scale.}
+#'   \item{\code{yTrain}: Rescaled responses for the training set.}
+#'   \item{\code{yTest}: Rescaled responses for the test set (if provided).}
+#' }
 #' 
 #' @export
 #' 
@@ -213,6 +224,15 @@ preprocess_y <- function(yTrain,yTest=NULL){
 #' 
 #' @return List of pre-processed features and rescaling transformations
 #'
+#' @note The output list contains:
+#' \itemize{
+#'   \item{\code{idx_sort_HC_m}: List of features reordering obtained by running hierarchical 
+#'     clustering on empirical correlations.
+#'     This object can be used to restore the data to its original order.}
+#'   \item{\code{X_m}: Reordered multi-view features for the training set.}
+#'   \item{\code{X_m_test}: Reordered multi-view features for the test set (if provided).}
+#' }
+#' 
 #' @export
 #' 
 reorder_features <- function(X_m,X_m_test=NULL,K0_HC=15){
