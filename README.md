@@ -21,9 +21,9 @@ devtools::install_github("niccoloanceschi/jafar")
 ```
 ## Documentation and Tutorial
 
-The main functions are detailed in the package [manual](https://github.com/niccoloanceschi/jafar/blob/jafar-manual.pdf).
+The main functions are detailed in the package [manual](https://github.com/niccoloanceschi/jafar/blob/main/jafar-manual.pdf).
 
-A full [tutorial](https://github.com/niccoloanceschi/jafar/blob/main/tutorial/tutorial.html) with examples and detailed workflow is provided in the repository.
+A full [tutorial](https://htmlpreview.github.io/?https://raw.githubusercontent.com/niccoloanceschi/jafar/main/tutorial/jafar_tutorial.html) with examples and detailed workflow is provided in the repository.
 
 ## Example usage 
 

@@ -237,8 +237,7 @@ plot_predictions <- function(yPred,yTrue,risMCMC,out_path='~/Desktop/',out_name=
 
 #' Visualization of regression coefficients 
 #' 
-#' @description Plot induced regression coefficients for \eqn{y \mid \{X_m\}_m = \{x_m\}_m}.
-#' Such coefficients directly relate the response \code{y} to the observed multi-view predictors \eqn{\{X_m\}_m}.
+#' @description Plot induced regression coefficients, directly relating the response \code{y} to the observed multi-view predictors.
 #' The corresponding representation is obtained by marginalizing out all latent factors.
 #' 
 #' @param yPred Response predictions, output of \code{\link{predict_y}} or \code{\link{predict_y_raw}}
