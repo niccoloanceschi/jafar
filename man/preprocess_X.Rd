@@ -2,20 +2,25 @@
 % Please edit documentation in R/jafar_preprocessing.R
 \name{preprocess_X}
 \alias{preprocess_X}
-\title{predictors preprocess: center & rescale + cdf transform (optional)}
+\title{Multi-view data preprocessing}
 \usage{
-preprocess_X(X_m, X_m_test = NULL, copula = F)
+preprocess_X(X_m, X_m_test = NULL, copula = FALSE)
 }
 \arguments{
-\item{X_m}{Train set predictors}
+\item{X_m}{Multi-view data for the training set.
+List of length \code{M}; m-th element: matrix \code{n x p_m[m]}.}
 
-\item{X_m_test}{Test set predictors}
+\item{X_m_test}{Multi-view data for the test set.
+List of length \code{M}; m-th element: matrix \code{nTest x p_m[m]}.
+(optional, default: \code{NULL})}
 
-\item{copula}{Apply cdf transformation}
+\item{copula}{Apply cdf transformation (logical, default: \code{FALSE})}
 }
 \value{
-List of preprocessed features and rescaling factors
+List of pre-processed features and rescaling factors
 }
 \description{
-predictors preprocess: center & rescale + cdf transform (optional)
+Center and rescale, and apply feature-wise cdf transform (optional).
+Multi-view data for out-of-sample observations can optionally be provided as input.
+If so, the corresponding features are rescaled coherently with the training set.
 }

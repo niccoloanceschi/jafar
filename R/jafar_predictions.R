@@ -93,11 +93,13 @@ jafar_coeff_y_t <- function(Xpred,nPred,M,p_m,K,K_m,Lambda_m,Gamma_m,Theta,
   return(list(lin_pred=lin_pred,coeff=coeff_m))
 }
 
-#' Response predictions and induced regression coefficients for JAFAR and JFR
+#' Response predictions for \code{jafar} and \code{jfr}
+#' 
+#' @description Compute induced regression coefficients and predicted responses either in-sample or out-of-sample.
 #'
-#' @param Xpred A list of \code{M} features' matrices, the m-th of dimension \code{nPred x p_m[m]} or possibly with missing (\code{X_m[[m]]=NULL)}).
+#' @param Xpred A list of \code{M} features matrices, the m-th one of dimension \code{nPred x p_m[m]} or possibly missing (i.e. \code{X_m[[m]]=NULL}).
 #' @param risMCMC Output of \code{\link{gibbs_jafar}} or \code{\link{gibbs_jfr}} containing posterior samples.
-#' @param rescale_pred Logical, whether to rescale loadings when computing response predictions (default: \code{FALSE}).
+#' @param rescale_pred Rescale loadings when computing response predictions (logical, default: \code{FALSE}).
 #'
 #' @return A list containing posterior samples of the predicted responses (matrix \code{tEff x nPred}),
 #'    and of the induced regression coefficients for each view (list of length \code{M}; m-th element: \code{tEff x p_m[m]}).
@@ -252,11 +254,13 @@ jafar_pred_y_t <- function(Xpred,nPred,M,p_m,K,K_m,Lambda_m,Gamma_m,Theta,
   return(lin_pred)
 }
 
-#' Response predictions for JAFAR and JFR
+#' Response predictions for \code{jafar} and \code{jfr}
+#' 
+#' @description Compute predicted responses, either in-sample or out-of-sample.
 #'
-#' @param Xpred A list of \code{M} features' matrices, the m-th of dimension \code{nPred x p_m[m]} or possibly with missing (\code{X_m[[m]]=NULL)}).
+#' @param Xpred A list of \code{M} features matrices, the m-th one of dimension \code{nPred x p_m[m]} or possibly missing (i.e. \code{X_m[[m]]=NULL}).
 #' @param risMCMC Output of \code{\link{gibbs_jafar}} or \code{\link{gibbs_jfr}} containing posterior samples.
-#' @param rescale_pred Logical, whether to rescale loadings when computing response predictions (default: \code{FALSE}).
+#' @param rescale_pred Rescale loadings when computing response predictions (logical, default: \code{FALSE}).
 #'
 #' @return A list containing posterior samples of the predicted responses (matrix \code{tEff x nPred}).
 #'

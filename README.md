@@ -19,7 +19,9 @@ It includes data preprocessing, results visualization, and post-processing funct
 # From GitHub - requires devtools
 devtools::install_github("niccoloanceschi/jafar")
 ```
-## Tutorial
+## Documentation and Tutorial
+
+The main functions are detailed in the package [manual](https://github.com/niccoloanceschi/jafar/blob/jafar-manual.pdf).
 
 A full [tutorial](https://github.com/niccoloanceschi/jafar/blob/main/tutorial/tutorial.html) with examples and detailed workflow is provided in the repository.
 

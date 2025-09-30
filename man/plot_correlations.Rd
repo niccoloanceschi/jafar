@@ -2,26 +2,27 @@
 % Please edit documentation in R/jafar_plots.R
 \name{plot_correlations}
 \alias{plot_correlations}
-\title{Plot the empirical and inferred within-view correlation matrices}
+\title{Visualization of induced correlation matrices}
 \usage{
 plot_correlations(
   risMCMC,
   X_m = NULL,
   out_path = "~/Desktop/",
-  out_name = "cor_matrices"
+  out_name = "correlations"
 )
 }
 \arguments{
-\item{risMCMC}{Posterior samples, output of \code{gibbs_jafar} or \code{gibbs_jfr}}
+\item{risMCMC}{Posterior samples, output of \code{\link{gibbs_jafar}} or \code{\link{gibbs_jfr}}}
 
-\item{X_m}{Training set multi-view predictors (optional, default: NULL).
-If NULL, only inferred correlation matrices are visualized.
-If not NULL, the empirical correlation matrices are displayed besides the inferred ones}
+\item{X_m}{Training set multi-view predictors (optional, default: \code{NULL}).
+If \code{NULL}, only inferred correlation matrices are visualized.
+If not \code{NULL}, the empirical correlation matrices are displayed besides the inferred ones}
 
 \item{out_path}{Output path where the generated plot will be saved (default: "~/Desktop/")}
 
-\item{out_name}{Output file name (default: "cor_matrices")}
+\item{out_name}{Output file name (default: "correlations")}
 }
 \description{
-Plot the empirical and inferred within-view correlation matrices
+Plot the empirical and inferred within-view correlation matrices.
+The induced correlations on \code{X_m} are obtained by marginalizing out all latent factors.
 }

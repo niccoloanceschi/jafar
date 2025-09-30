@@ -2,20 +2,20 @@
 % Please edit documentation in R/jafar_predictions.R
 \name{predict_y_raw}
 \alias{predict_y_raw}
-\title{Response predictions for JAFAR and JFR}
+\title{Response predictions for \code{jafar} and \code{jfr}}
 \usage{
 predict_y_raw(Xpred, risMCMC, rescale_pred = FALSE)
 }
 \arguments{
-\item{Xpred}{A list of \code{M} features' matrices, the m-th of dimension \code{nPred x p_m[m]} or possibly with missing (\code{X_m[[m]]=NULL)}).}
+\item{Xpred}{A list of \code{M} features matrices, the m-th one of dimension \code{nPred x p_m[m]} or possibly missing (i.e. \code{X_m[[m]]=NULL}).}
 
 \item{risMCMC}{Output of \code{\link{gibbs_jafar}} or \code{\link{gibbs_jfr}} containing posterior samples.}
 
-\item{rescale_pred}{Logical, whether to rescale loadings when computing response predictions (default: \code{FALSE}).}
+\item{rescale_pred}{Rescale loadings when computing response predictions (logical, default: \code{FALSE}).}
 }
 \value{
 A list containing posterior samples of the predicted responses (matrix \code{tEff x nPred}).
 }
 \description{
-Response predictions for JAFAR and JFR
+Compute predicted responses, either in-sample or out-of-sample.
 }

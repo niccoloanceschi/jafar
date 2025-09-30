@@ -95,7 +95,7 @@ yTest <- preprocessed_y$yTest
 For better visualization, features in each view can be reordered by hierarchical clustering
 
 ```{r}
-reordered_X <- features_reorder_HC(Data$X_m,X_m_test=Data$X_m_test)
+reordered_X <- reorder_features(Data$X_m,X_m_test=Data$X_m_test)
 X_m <- reordered_X$X_m
 X_m_test <- reordered_X$X_m_test
 ```
@@ -112,7 +112,7 @@ The underlying $\texttt{CUSP}$ structures require conservative upper bounds on t
   - If unspecified, $\texttt{K0}$ is set to $\text{floor}(3\cdot\log(\text{max}(p_m)))$
   - If unspecified, $\texttt{K0_m[m]}$ is set to $\text{floor}(3\cdot\log(p_m[m]))$.
 
-The prior entails additional hyperparameters, detailed in the documentation of the function $\texttt{jafar_set_hyperparameters}$.
+The prior entails additional hyperparameters, detailed in the documentation of the function $\texttt{set_hyperparameters}$.
 They can be specified via the input list $\texttt{hyperparams}$, which we use to set the random seed.
 Here, the remaining hyperparameters are set to their default values, which are broadly applicable and work well across a variety of scenarios.
 We refer to the main manuscript for further guidance and intuition on their roles.
@@ -325,4 +325,6 @@ plot_coefficients(y01_pred)
 ```{r, out.width=600, out.height=350}
 knitr::include_graphics(file.path(output_dir,'coefficients.pdf'))
 ```
+
+
 

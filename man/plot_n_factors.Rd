@@ -2,24 +2,24 @@
 % Please edit documentation in R/jafar_plots.R
 \name{plot_n_factors}
 \alias{plot_n_factors}
-\title{Plot MCMC samples of the inferred number of factors}
+\title{Visualization of inferred ranks}
 \usage{
 plot_n_factors(
   risMCMC,
   out_path = "~/Desktop",
-  out_name_shared = "n_factors_shared",
-  out_name_specific = "n_factor_specific"
+  out_shared = "n_factors_shared",
+  out_specific = "n_factor_specific"
 )
 }
 \arguments{
-\item{risMCMC}{Posterior samples, output of \code{gibbs_jafar} or \code{gibbs_jfr}}
+\item{risMCMC}{Posterior samples, output of \code{\link{gibbs_jafar}} or \code{\link{gibbs_jfr}}}
 
 \item{out_path}{Output path where the generated plot will be saved}
 
-\item{out_name_shared}{Output file name for the shared component plot (default: "n_factors_shared")}
+\item{out_shared}{File name for the shared component plot (default: "n_factors_shared")}
 
-\item{out_name_specific}{Output file name for the specific components plot (default: "n_factor_specific")}
+\item{out_specific}{File name for the specific components plot (default: "n_factor_specific")}
 }
 \description{
-Plot MCMC samples of the inferred number of factors
+Plot MCMC samples of the inferred number of factors.
 }

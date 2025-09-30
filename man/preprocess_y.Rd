@@ -2,18 +2,28 @@
 % Please edit documentation in R/jafar_preprocessing.R
 \name{preprocess_y}
 \alias{preprocess_y}
-\title{response preprocess: center & rescale}
+\title{Response preprocessing}
 \usage{
 preprocess_y(yTrain, yTest = NULL)
 }
 \arguments{
 \item{yTrain}{Train set responses}
 
-\item{yTest}{Test set responses}
+\item{yTest}{Test set responses (optional, default, \code{NULL})}
 }
 \value{
-List of preprocessed responses and rescaling factors
+List of pre-processed responses and rescaling transformation
 }
 \description{
-response preprocess: center & rescale
+Center and rescale.
+Response for out-of-sample observations can optionally be provided as input.
+If so, the corresponding values are rescaled coherently with the training set.
+}
+\note{
+The output list includes:
+\itemize{
+\item{\code{preprocess_y}: Transformation applied to ....}
+\item{\code{yTrain}: ...}
+\item{\code{yTest}: ...}
+}
 }

@@ -2,17 +2,19 @@
 % Please edit documentation in R/jafar_plots.R
 \name{plot_coefficients}
 \alias{plot_coefficients}
-\title{Plot induced regression coefficients for y|X=x}
+\title{Visualization of regression coefficients}
 \usage{
 plot_coefficients(yPred, out_path = "~/Desktop/", out_name = "coefficients")
 }
 \arguments{
-\item{yPred}{Response predictions, output of \code{predict_y} or \code{predict_y_raw}}
+\item{yPred}{Response predictions, output of \code{\link{predict_y}} or \code{\link{predict_y_raw}}}
 
 \item{out_path}{Output path where the generated plot will be saved (default: "~/Desktop/")}
 
 \item{out_name}{Output file name (default: "coefficients")}
 }
 \description{
-Plot induced regression coefficients for y|X=x
+Plot induced regression coefficients for \eqn{y \mid \{X_m\}_m = \{x_m\}_m}.
+Such coefficients directly relate the response \code{y} to the observed multi-view predictors \eqn{\{X_m\}_m}.
+The corresponding representation is obtained by marginalizing out all latent factors.
 }

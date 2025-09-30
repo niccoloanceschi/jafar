@@ -2,7 +2,7 @@
 % Please edit documentation in R/jafar_plots.R
 \name{plot_predictions}
 \alias{plot_predictions}
-\title{Plot response predictions against true values}
+\title{Visualization of predicted responses}
 \usage{
 plot_predictions(
   yPred,
@@ -13,16 +13,16 @@ plot_predictions(
 )
 }
 \arguments{
-\item{yPred}{Response predictions, output of \code{predict_y} or \code{predict_y_raw}}
+\item{yPred}{Response predictions, output of \code{\link{predict_y}} or \code{\link{predict_y_raw}}}
 
 \item{yTrue}{True values of the responses}
 
-\item{risMCMC}{Posterior samples, output of \code{gibbs_jafar} or \code{gibbs_jfr}}
+\item{risMCMC}{Posterior samples, output of \code{\link{gibbs_jafar}} or \code{\link{gibbs_jfr}}}
 
 \item{out_path}{Output path where the generated plot will be saved (default: "~/Desktop/")}
 
 \item{out_name}{Output file name (default: "predictions")}
 }
 \description{
-Plot response predictions against true values
+Plot response predictions against true values.
 }

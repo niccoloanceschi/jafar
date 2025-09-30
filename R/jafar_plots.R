@@ -2,18 +2,20 @@
 omics_colors = c(c('#2DC4DC','#648FFF','#8D2FE5','#DC267F','#FE6100','#FFB000','#57B38C','#2B5B43'),
                  rev(c('#DDCC77','#88CCEE','#679DCC','#BEB0D6','#CC6677','#882255')))
 
-#' Plot MCMC samples of the inferred number of factors
+#' Visualization of inferred ranks
 #' 
-#' @param risMCMC Posterior samples, output of \code{gibbs_jafar} or \code{gibbs_jfr}
+#' @description Plot MCMC samples of the inferred number of factors.
+#' 
+#' @param risMCMC Posterior samples, output of \code{\link{gibbs_jafar}} or \code{\link{gibbs_jfr}}
 #' @param out_path Output path where the generated plot will be saved
-#' @param out_name_shared Output file name for the shared component plot (default: "n_factors_shared")
-#' @param out_name_specific Output file name for the specific components plot (default: "n_factor_specific")
+#' @param out_shared File name for the shared component plot (default: "n_factors_shared")
+#' @param out_specific File name for the specific components plot (default: "n_factor_specific")
 #' 
 #' @export
 #' 
 plot_n_factors <- function(risMCMC,out_path='~/Desktop',
-                           out_name_shared='n_factors_shared',
-                           out_name_specific='n_factor_specific'){
+                           out_shared='n_factors_shared',
+                           out_specific='n_factor_specific'){
   
   M = length(risMCMC$s2_inv_m)
   
@@ -24,7 +26,7 @@ plot_n_factors <- function(risMCMC,out_path='~/Desktop',
   
   K_max = max(risMCMC$K)
   
-  pdf(file=file.path(out_path, paste0(out_name_shared,".pdf")), height=3, width=5)
+  pdf(file=file.path(out_path, paste0(out_shared,".pdf")), height=3, width=5)
   par(mar=c(3.7, 3.7, 1.2, 3.8), mgp=c(2,0.7,0))
   plot(risMCMC$K, type="l", lty=1, col=1, ylim=c(0, K_max),
        ylab="N. of Shared Factors", xlab="MCMC Iterations", main=NULL, lwd=1.3)
@@ -46,7 +48,7 @@ plot_n_factors <- function(risMCMC,out_path='~/Desktop',
     
     Km_max = max(unlist(risMCMC$K_Gm))
     
-    pdf(file=file.path(out_path, paste0(out_name_specific,".pdf")), height=3, width=5)
+    pdf(file=file.path(out_path, paste0(out_specific,".pdf")), height=3, width=5)
     par(mar=c(3.7, 3.7, 1.2, 3.8), mgp=c(2,0.7,0))
     matplot(y=risMCMC$K_Gm,type='l',lty=1, col=omics_colors[1:M] ,ylim=c(0,Km_max),
             ylab='N. of Specific Factors',xlab='MCMC Iterations',main=NULL, lwd=1.3)
@@ -62,12 +64,15 @@ plot_n_factors <- function(risMCMC,out_path='~/Desktop',
 }
 
 
-#' Plot the empirical and inferred within-view correlation matrices
+#' Visualization of induced correlation matrices
 #' 
-#' @param risMCMC Posterior samples, output of \code{gibbs_jafar} or \code{gibbs_jfr}
-#' @param X_m Training set multi-view predictors (optional, default: NULL).
-#'    If NULL, only inferred correlation matrices are visualized.
-#'    If not NULL, the empirical correlation matrices are displayed besides the inferred ones
+#' @description Plot the empirical and inferred within-view correlation matrices.
+#' The induced correlations on \code{X_m} are obtained by marginalizing out all latent factors.
+#' 
+#' @param risMCMC Posterior samples, output of \code{\link{gibbs_jafar}} or \code{\link{gibbs_jfr}}
+#' @param X_m Training set multi-view predictors (optional, default: \code{NULL}).
+#'    If \code{NULL}, only inferred correlation matrices are visualized.
+#'    If not \code{NULL}, the empirical correlation matrices are displayed besides the inferred ones
 #' @param out_path Output path where the generated plot will be saved (default: "~/Desktop/")
 #' @param out_name Output file name (default: "correlations")
 #'
@@ -146,11 +151,13 @@ unif_jitter <- function(yPred,range=0.25){
   y_jitter
 }
 
-#' Plot response predictions against true values
+#' Visualization of predicted responses
 #' 
-#' @param yPred Response predictions, output of \code{predict_y} or \code{predict_y_raw}
+#' @description Plot response predictions against true values.
+#' 
+#' @param yPred Response predictions, output of \code{\link{predict_y}} or \code{\link{predict_y_raw}}
 #' @param yTrue True values of the responses
-#' @param risMCMC Posterior samples, output of \code{gibbs_jafar} or \code{gibbs_jfr}
+#' @param risMCMC Posterior samples, output of \code{\link{gibbs_jafar}} or \code{\link{gibbs_jfr}}
 #' @param out_path Output path where the generated plot will be saved (default: "~/Desktop/")
 #' @param out_name Output file name (default: "predictions")
 #'
@@ -228,9 +235,13 @@ plot_predictions <- function(yPred,yTrue,risMCMC,out_path='~/Desktop/',out_name=
 
 
 
-#' Plot induced regression coefficients for y|X=x
+#' Visualization of regression coefficients 
 #' 
-#' @param yPred Response predictions, output of \code{predict_y} or \code{predict_y_raw}
+#' @description Plot induced regression coefficients for \eqn{y \mid \{X_m\}_m = \{x_m\}_m}.
+#' Such coefficients directly relate the response \code{y} to the observed multi-view predictors \eqn{\{X_m\}_m}.
+#' The corresponding representation is obtained by marginalizing out all latent factors.
+#' 
+#' @param yPred Response predictions, output of \code{\link{predict_y}} or \code{\link{predict_y_raw}}
 #' @param out_path Output path where the generated plot will be saved (default: "~/Desktop/")
 #' @param out_name Output file name (default: "coefficients")
 #'
@@ -345,22 +356,24 @@ white_spacer <- function() {
 }
 
 
-#' Plot posterior means of factor loadings. 
+#' Visualization of loadings matrices
 #' 
-#' @description Rotational alignment must be performed in advanced through the function \code{multiviewMatchAlign}
+#' @description Plot posterior means of the loading matrices, including the response loadings in the supervised case. 
+#'  Rotational alignment must be performed in advance.
+#'  To this end, make sure to provide in input the output of \code{\link{multiviewMatchAlign}}. 
 #'
-#' @param risMCMC Posterior samples, output of \code{gibbs_jafar} or \code{gibbs_jfr}
+#' @param risMCMC Postprocesed posterior samples, output of \code{\link{multiviewMatchAlign}}
 #' @param out_path Output path where the generated plot will be saved
-#' @param out_name_shared Output file name for the shared component plot (default: "n_factors_shared")
-#' @param out_name_specific Output file name for the specific components plot (default: "n_factor_specific")
+#' @param out_shared File name for the shared component plot (default: "n_factors_shared")
+#' @param out_specific File name for the specific components plot (default: "n_factor_specific")
 #' 
 #' @importFrom ggplot2 ggplot aes geom_line theme
 #'
 #' @export
 #'
 plot_loadings <- function(risMCMC,out_path='~/Desktop/',
-                          out_name_shared='shared_loadings',
-                          out_name_specific='specific_loadings'){
+                          out_shared='shared_loadings',
+                          out_specific='specific_loadings'){
   
   is_supervised = ('Theta'%in%names(risMCMC))
   is_jafar = grepl('jafar',risMCMC$hyper_param$model)
@@ -448,7 +461,7 @@ plot_loadings <- function(risMCMC,out_path='~/Desktop/',
   
   combined_plots <- cowplot::plot_grid(plotlist=all_plots,nrow=Nrow,ncol=M,align="hv",rel_heights=rel_heights)
   
-  ggsave(file.path(out_path, paste0(out_name_shared,".pdf")),
+  ggsave(file.path(out_path, paste0(out_shared,".pdf")),
          combined_plots, width = tot_width, height = tot_height)
   
   # plot specific components
@@ -476,7 +489,7 @@ plot_loadings <- function(risMCMC,out_path='~/Desktop/',
     
     combined_plots <- cowplot::plot_grid(plotlist=all_plots,nrow=Nrow,ncol=M,align="hv",rel_heights=rel_heights)
     
-    ggsave(file.path(out_path, paste0(out_name_specific,".pdf")),
+    ggsave(file.path(out_path, paste0(out_specific,".pdf")),
            combined_plots, width = tot_width, height = tot_height)
     
   }

@@ -1,83 +1,97 @@
 
-#' Gibbs Sampler for JAFAR
+#' Gibbs sampler for \code{jafar}
 #'
 #' @description
-#' Fits a Joint Additive FActor Regression (JAFAR) model using Gibbs sampling.
-#' Variation across multiple data-views is explained via shared and study-specific latent factors.
+#' Fits a Bayesian Joint Additive FActor Regression (\code{jafar}) model using Gibbs sampling.
+#' Variation across multiple data-views is explained via shared and view-specific latent factors.
+#' The model can be fitted in both unsupervised and supervised settings. 
 #' Default and optional outputs include posterior means of the induced covariances,
 #' posterior samples of residual variances, latent factors, and factor loadings. 
-#' Supports parallel computation and tempered updates to limit rank estimation in extreme large-p-small-n settings.
+#' Supports parallel computation and tempered loading updates to limit rank estimation in extreme large-p-small-n settings.
 #'
-#' @param X_m Multi-view input data. Rows should correspond to samples, columns to features.
-#'  (list of length \code{M}; m-th element: matrix n x p_m[m]).
-#' @param y Vector responses (of length n). Set to NULL for unsupervised mode (default: NULL).
-#' @param yBinary Logical, indicating if the response(s) are binary (default: FALSE).
+#' @references
+#' Anceschi N., Ferrari F., Dunson D. B., & Mallick H. (2025). 
+#' *Bayesian Joint Additive Factor Models for Multiview Learning*.
+#' <https://arxiv.org/abs/2406.00778>
+#' 
+#' Legramanti S., Durante D., & Dunson D. B. (2020).
+#' *Bayesian cumulative shrinkage for infinite factorizations*. 
+#' Biometrika, 107(3), 745-752. <https://doi.org/10.1093/biomet/asaa008>
+#'
+#' @param X_m Multi-view input data, pre-processed via \code{\link{preprocess_X}}.
+#'  List of length \code{M}; m-th element: matrix \code{n x p_m[m]}.
+#'  Rows should correspond to samples, columns to features.
+#' @param y Vector of responses (length \code{n}) pre-processed via \code{\link{preprocess_y}}.
+#'  Set to \code{NULL} for unsupervised mode (default: \code{NULL}).
+#' @param yBinary Logical, indicating if the response(s) are binary (default: \code{FALSE}).
 #' @param K0 Upper bound to numbers of shared latent factors (optional)
-#'  If NULL, \code{K0} is set to \code{3*log(max(p_m))}
+#'  If \code{NULL}, \code{K0} is set to \code{3*log(max(p_m))}
 #' @param K0_m Upper bounds to numbers of view-specific latent factors (optional)
-#'  Length should equal \code{length(X_m)}. If NULL, \code{K0[m]} is set to \code{3*log(max_(p_m[m]))}
+#'  Length should equal \code{length(X_m)}. If \code{NULL}, \code{K0[m]} is set to \code{3*log(max_(p_m[m]))}
 #' @param tMCMC Total number of MCMC iterations (default: 20000).
 #' @param tBurnIn Number of burn-in iterations (default: 15000).
 #' @param tThin Thinning interval for saving samples (default: 10).
-#' @param hyperparams List of hyperparameters for the D-CUSP prior distributions.
-#'  Missing hyperparameters are replaced by defaults encoded in \code{\link{jafar_set_hyperparameters}}.
-#' @param get_latent_vars Logical, whether to return latent factors and loading matrices (default: TRUE).
-#' @param get_last_sample Logical, whether to return only the last sample of the MCMC chain (default: FALSE).
-#' @param parallel Logical, whether to use parallel computation for the loadings' update (default: TRUE).
-#' @param tempered Logical, temperature parameter for tempered sampling (default: FALSE, no tempering).
-#' @param rescale_pred Logical, whether to rescale loadings when computing response predictions (default: FALSE).
+#' @param hyperparams List of hyperparameters for the \code{D-CUSP} prior distributions.
+#'  Missing hyperparameters are replaced by default values encoded in \code{\link{set_hyperparameters}}.
+#' @param get_latent_vars Return latent factors and loading matrices (logical, default: \code{TRUE}).
+#' @param get_last_sample Return the last sample of the MCMC chain (logical, default: \code{FALSE}).
+#' @param parallel Use parallel computation for the loadings update (logical, default: \code{TRUE}).
+#' @param tempered Use tempered full-conditional for the loadings matrices (logical, default: \code{FALSE}).
+#' @param rescale_pred Rescale loadings when computing response predictions (logical, default: \code{FALSE}).
 #'
-#' @note
+#' @details 
 #' - Ensure that all matrices in \code{X_m} have the same number of rows (subjects).  
-#' - Missing data in \code{X_m} are allowed as NA and imputed in the MCMC.
+#' - Missing data in \code{X_m} are allowed as \code{NA} and imputed in the MCMC.
 #'
 #' @return A list containing posterior samples, latent variables (if requested), and other relevant model outputs.
 #'
-#' @details
-#'  The number of samples in output is \code{tEff=(tMCMC-tBurnIn)%/%tThin}.
-#'  The output list contains:
+#' @note
+#'  All posterior samples are reported only after burn-in, except for \code{K} and \code{K_Gm}.
+#'  The number of samples after thinning is \code{tFull=tMCMC%/%tThin} and \code{tEff=(tMCMC-tBurnIn)%/%tThin} 
+#'  for the full chain and post burn-in, respectively. \cr 
+#'  The output list includes:
 #'  \itemize{
-#'    \item{\code{K}}{Number shared latent factors (vector of length \code{tEff}).}
-#'    \item{\code{K_Gm}}{Number view-specific latent factors (matrix \code{tEff x M}).}
-#'    \item{\code{K_Lm_eff}}{Numbers of shared factors active in each view (matrix \code{tEff x M}).}
-#'    \item{\code{K_Gm_eff}}{Numbers of specific factors active in each view (matrix \code{tEff x M}).}
-#'    \item{\code{active_Lm}}{Binary indicators of shared factors activity across views (binary array \code{tEff x K x M}s).}
-#'    \item{\code{Cov_m_mean}}{Posterior mean of the covariance matrix for each dataset (list of length \code{M}; m-th element: matrix \code{p_m[m] x p_m[m]}).}
-#'    \item{\code{Marg_Var_m}}{Marginal variances of features (list of length \code{M}; m-th element: matrix \code{tEff x p_m[m]}).}
-#'    \item{\code{s2_inv_m}}{Inverse residual variances across views (list of length \code{M}; m-th element: matrix \code{tEff x p_m[m]}).}
-#'    \item{\code{mu_m}}{Features intercepts across views (list of length \code{M}; m-th element: matrix \code{tEff x p_m[m]}).}
-#'    \item{\code{hyper_param}}{List of hyperparameters used for the model, including user-specified values and defaults ones were missing.}
+#'    \item{\code{K}: Number shared latent factors (vector of length \code{tFull}).}
+#'    \item{\code{K_Gm}: Number view-specific latent factors (matrix \code{tFull x M}).}
+#'    \item{\code{K_Lm_eff}: Numbers of shared factors active in each view (matrix \code{tEff x M}).}
+#'    \item{\code{K_Gm_eff}: Numbers of specific factors active in each view (matrix \code{tEff x M}).}
+#'    \item{\code{active_Lm}: Binary indicators of shared factors activity across views (binary array \code{tEff x K x M}s).}
+#'    \item{\code{Cov_m_mean}: Posterior mean of the covariance matrix for each dataset (list of length \code{M}; m-th element: matrix \code{p_m[m] x p_m[m]}).}
+#'    \item{\code{Marg_Var_m}: Marginal variances of features (list of length \code{M}; m-th element: matrix \code{tEff x p_m[m]}).}
+#'    \item{\code{s2_inv_m}: Inverse residual variances across views (list of length \code{M}; m-th element: matrix \code{tEff x p_m[m]}).}
+#'    \item{\code{mu_m}: Features intercepts across views (list of length \code{M}; m-th element: matrix \code{tEff x p_m[m]}).}
+#'    \item{\code{hyper_param}: List of hyperparameters used for the model, including user-specified values and defaults ones were missing.}
 #'  }
 #'  If \code{is_supervised = TRUE}:
 #'  \itemize{   
-#'    \item{\code{K_T_eff}}{Numbers of shared factors active in the response (vector of length \code{tEff}).}
-#'    \item{\code{K_Tm_eff}}{Numbers of specific factors active in the response (matrix \code{tEff x M}).}
-#'    \item{\code{active_T}}{Binary indicators of shared factors activity in the response (binary matrix \code{tEff x K}).}
-#'    \item{\code{active_Tm}}{Binary indicators of specific factors activity in the response (list of length \code{M}; m-th element: matrix \code{tEff x K_Gm[m]}).}
-#'    \item{\code{s2_inv}}{Response inverse residual variances (vector of length \code{tEff}).}
-#'    \item{\code{mu_y}}{Response intercept (vector of length \code{tEff}).}
-#'    \item{\code{Theta}}{Response loadings on shared factors (matrix \code{tEff x K}).}
-#'    \item{\code{Theta_m}}{Response loadings on specific factors (list of length \code{M}; m-th element: matrix \code{tEff x K_Gm[m]}).}
-#'    \item{\code{y_MC}}{Latent probit utilities (matrix \code{tEff x n}). (only if \code{yBinary = TRUE}).}
+#'    \item{\code{K_T_eff}: Numbers of shared factors active in the response (vector of length \code{tEff}).}
+#'    \item{\code{K_Tm_eff}: Numbers of specific factors active in the response (matrix \code{tEff x M}).}
+#'    \item{\code{active_T}: Binary indicators of shared factors activity in the response (binary matrix \code{tEff x K}).}
+#'    \item{\code{active_Tm}: Binary indicators of specific factors activity in the response (list of length \code{M}; m-th element: matrix \code{tEff x K_Gm[m]}).}
+#'    \item{\code{s2_inv}: Response inverse residual variances (vector of length \code{tEff}).}
+#'    \item{\code{mu_y}: Response intercept (vector of length \code{tEff}).}
+#'    \item{\code{Theta}: Response loadings on shared factors (matrix \code{tEff x K}).}
+#'    \item{\code{Theta_m}: Response loadings on specific factors (list of length \code{M}; m-th element: matrix \code{tEff x K_Gm[m]}).}
+#'    \item{\code{y_MC}: Latent probit utilities (matrix \code{tEff x n}). (only if \code{yBinary = TRUE}).}
 #'  }
 #'  If \code{get_latent_vars = TRUE}:
 #'  \itemize{   
-#'    \item{\code{Lambda_m}}{Loadings matrices on shared factors (list of length \code{M}; m-th element: array \code{tEff x p_m[m] x K}).}
-#'    \item{\code{Gamma_m}}{Loadings matrices on view-specific factors (list of length \code{M}; m-th element: array \code{tEff x p_m[m] x K_Gm[m]}).}
-#'    \item{\code{eta}}{Shared latent factors (array \code{tEff x n x K}).}
-#'    \item{\code{phi_m}}{View-specific latent factors (list of length \code{M}; m-th element: array \code{tEff x n x K_Gm[m]}).}
+#'    \item{\code{Lambda_m}: Loadings matrices on shared factors (list of length \code{M}; m-th element: array \code{tEff x p_m[m] x K}).}
+#'    \item{\code{Gamma_m}: Loadings matrices on view-specific factors (list of length \code{M}; m-th element: array \code{tEff x p_m[m] x K_Gm[m]}).}
+#'    \item{\code{eta}: Shared latent factors (array \code{tEff x n x K}).}
+#'    \item{\code{phi_m}: View-specific latent factors (list of length \code{M}; m-th element: array \code{tEff x n x K_Gm[m]}).}
 #'  }
 #'  If the input matrices \code{X_m} contain missing values:
 #'  \itemize{
-#'    \item{\code{Xm_MC}}{Posterior samples of imputed values for missing entries.
+#'    \item{\code{Xm_MC}: Posterior samples of imputed values for missing entries.
 #'      A list of length \code{M}; the m-th element is itself a list (one per feature with missingness),
 #'      each containing an \code{tEff × n_miss} matrix of imputed values across MCMC iterations.}
-#'    \item{\code{na_idx}}{List of length \code{M}; the m-th element gives the column indices of missing entries in \code{X_m[[m]]}.}
-#'    \item{\code{na_row_idx}}{List of length \code{M}; the m-th element gives the corresponding row indices of missing entries in \code{X_m[[m]]}.}
+#'    \item{\code{na_idx}: List of length \code{M}; the m-th element gives the column indices of missing entries in \code{X_m[[m]]}.}
+#'    \item{\code{na_row_idx}: List of length \code{M}; the m-th element gives the corresponding row indices of missing entries in \code{X_m[[m]]}.}
 #' }
 #'  If \code{get_last_sample = TRUE}:
 #'  \itemize{   
-#'    \item{\code{last_sample}}{List of posterior values of all parameters at the last MCMC iteration, including latent factors, loadings, residual variances, and hyperparameters.}
+#'    \item{\code{last_sample}: List of posterior values of all parameters at the last MCMC iteration, including latent factors, loadings, residual variances, and hyperparameters.}
 #' }
 #'
 #' @export
@@ -115,7 +129,7 @@ gibbs_jafar <- function(X_m, y=NULL, yBinary=F, K0=NULL, K0_m=NULL,
   if(is.scalar(K0_m)){K0_m <- rep(K0_m)}
   
   # Set hyperparameters
-  hyperparams <- jafar_set_hyperparameters(hyperparams, M, is_supervised)
+  hyperparams <- set_hyperparameters(hyperparams, M, is_supervised)
   list2env(hyperparams, envir=get_env)
   set.seed(seed)
   

@@ -132,41 +132,53 @@ multiviewAlignment = function(lambda, eta=NULL, theta=NULL, p_views=NULL, normal
   return(output)
 }
 
-#' Perform rotational alignment using multi-view \code{MatchAlign}.
+#' Rotational alignment of latent factors and loading matrices
+#' 
+#' @description Post-processing routine to solve rotational ambiguity across MCMC samples of latent variables.
+#' The alignment is performed using multi-view \code{MatchAlign} on the shared component and regular \code{MatchAlign} on the specific ones.
 #'
-#' @param risMCMC Posterior samples, as returned by \code{gibbs_jafar} or \code{gibbs_jfr}.
+#' @references 
+#' Anceschi N., Ferrari F., Dunson D. B., & Mallick H. (2025). 
+#' *Bayesian Joint Additive Factor Models for Multiview Learning*.
+#' <https://arxiv.org/abs/2406.00778>
+#' 
+#' Poworoznek E., Anceschi N., Ferrari F., & Dunson D. B. (2025).
+#' *Efficiently Resolving Rotational Ambiguity in Bayesian Matrix Sampling with Matching*.
+#' Bayesian Analysis, 1–22. <https://doi.org/10.1214/25-BA1544>
+#'
+#' @param risMCMC Posterior samples, as returned by \code{\link{gibbs_jafar}} or \code{\link{gibbs_jfr}}.
 #'
 #' @return A modified version of the input \code{risMCMC}, with latent factors, loading matrices, 
-#'   and (if supervised) response loadings rotated according to multi-view \code{MatchAlign}.
+#'   and response loadings (if supervised) rotated according to multi-view \code{MatchAlign}.
 #'
 #' @importFrom abind abind
 #'
 #' @export
 #' 
-multiviewMatchAlign <- function(ris_MCMC){
+multiviewMatchAlign <- function(risMCMC){
   
-  if(!'eta'%in%names(ris_MCMC)){stop("Rotational alignment requires samples of latent quantities. 
+  if(!'eta'%in%names(risMCMC)){stop("Rotational alignment requires samples of latent quantities. 
                                    Re-run the Gibbs sampler with 'get_latent_vars=TRUE'")}
   
-  M <- length(ris_MCMC$mu_m)
-  p_m <- sapply(ris_MCMC$Lambda_m, ncol)
+  M <- length(risMCMC$mu_m)
+  p_m <- sapply(risMCMC$Lambda_m, ncol)
   
-  nMC <- dim(ris_MCMC$eta)[1]
-  K <- dim(ris_MCMC$eta)[3]
+  nMC <- dim(risMCMC$eta)[1]
+  K <- dim(risMCMC$eta)[3]
   
   idx_p0 <- 1+c(0,cumsum(p_m)[-M])
   idx_pF <- cumsum(p_m)
   
-  is_supervised = ('Theta'%in%names(ris_MCMC))
+  is_supervised = ('Theta'%in%names(risMCMC))
   
   print("Rotating Shared Component")
   
   # Reshape to lists of matrices
-  lambda_lists <- lapply(ris_MCMC$Lambda_m, function(x) apply(x, 1, identity, simplify = FALSE))
+  lambda_lists <- lapply(risMCMC$Lambda_m, function(x) apply(x, 1, identity, simplify = FALSE))
   lambda_lists <- lapply(1:nMC, function(t) do.call(rbind, lapply(lambda_lists, `[[`, t)))
-  eta_list <- apply(ris_MCMC$eta, 1, identity, simplify = FALSE)
+  eta_list <- apply(risMCMC$eta, 1, identity, simplify = FALSE)
   theta_list = NULL
-  if(is_supervised){theta_list <- apply(ris_MCMC$Theta, 1, identity, simplify = FALSE)}
+  if(is_supervised){theta_list <- apply(risMCMC$Theta, 1, identity, simplify = FALSE)}
   
   # Align and rotate
   LaEtaTh_R <- multiviewAlignment(lambda_lists,eta_list,theta_list,p_views=p_m,normalize=F)
@@ -174,36 +186,36 @@ multiviewMatchAlign <- function(ris_MCMC){
   
   # Reshape back to arrays
   lambda_array <- unname(aperm(do.call(abind, c(LaEtaTh_R$lambda, along = 3)),c(3,1,2)))
-  ris_MCMC$Lambda_m <- lapply(1:M, function(m) lambda_array[,idx_p0[m]:idx_pF[m],])
-  ris_MCMC$eta = unname(aperm(do.call(abind, c(LaEtaTh_R$eta, along = 3)),c(3,1,2)))
-  if(is_supervised){ris_MCMC$Theta = unname(do.call(abind, c(LaEtaTh_R$theta, along = 1)))}
+  risMCMC$Lambda_m <- lapply(1:M, function(m) lambda_array[,idx_p0[m]:idx_pF[m],])
+  risMCMC$eta = unname(aperm(do.call(abind, c(LaEtaTh_R$eta, along = 3)),c(3,1,2)))
+  if(is_supervised){risMCMC$Theta = unname(do.call(abind, c(LaEtaTh_R$theta, along = 1)))}
   rm(lambda_array, LaEtaTh_R)
   
-  if(grepl('jafar',ris_MCMC$hyper_param$model)){
+  if(grepl('jafar',risMCMC$hyper_param$model)){
     
-    K_Gm <- sapply(ris_MCMC$phi_m, function(aa) dim(aa)[3])
+    K_Gm <- sapply(risMCMC$phi_m, function(aa) dim(aa)[3])
     
     for(m in 1:M){
       
       print(paste0("Rotating Specific Component - m=",m))  
       
       # Reshape to lists of matrices
-      Gamma_m_list <- apply(ris_MCMC$Gamma_m[[m]], 1, identity, simplify = FALSE)
-      phi_m_list <- apply(ris_MCMC$phi_m[[m]], 1, identity, simplify = FALSE)
+      Gamma_m_list <- apply(risMCMC$Gamma_m[[m]], 1, identity, simplify = FALSE)
+      phi_m_list <- apply(risMCMC$phi_m[[m]], 1, identity, simplify = FALSE)
       theta_m_list <- NULL
       if(is_supervised){
-        theta_m_list <- apply(ris_MCMC$Theta_m[[m]], 1, identity, simplify = FALSE)
+        theta_m_list <- apply(risMCMC$Theta_m[[m]], 1, identity, simplify = FALSE)
       }
       
       # Align and rotate
       GaPhiTh_m_R <- multiviewAlignment(Gamma_m_list, phi_m_list,theta_m_list,normalize=F)
       
       # Reshape back to arrays
-      ris_MCMC$Gamma_m[[m]] = unname(aperm(do.call(abind, c(GaPhiTh_m_R$lambda, along = 3)),c(3,1,2)))
-      ris_MCMC$phi_m[[m]] = unname(aperm(do.call(abind, c(GaPhiTh_m_R$eta, along = 3)),c(3,1,2)))
-      if(is_supervised){ris_MCMC$Theta_m[[m]] = unname(do.call(abind, c(GaPhiTh_m_R$theta, along = 1)))}
+      risMCMC$Gamma_m[[m]] = unname(aperm(do.call(abind, c(GaPhiTh_m_R$lambda, along = 3)),c(3,1,2)))
+      risMCMC$phi_m[[m]] = unname(aperm(do.call(abind, c(GaPhiTh_m_R$eta, along = 3)),c(3,1,2)))
+      if(is_supervised){risMCMC$Theta_m[[m]] = unname(do.call(abind, c(GaPhiTh_m_R$theta, along = 1)))}
     }
   }
   
-  return(ris_MCMC)
+  return(risMCMC)
 }

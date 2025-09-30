@@ -1,21 +1,21 @@
 
 is.scalar <- function(x){ is.atomic(x) && length(x) == 1L }
 
-#' Set Hyperparameters for JAFAR and JFR models
+#' Set the hyperparameters for \code{jafar} and \code{jfr}
 #'
-#' @description
-#'    Helper function to set hyperparameters for \code{\link{gibbs_jfr}} and \code{\link{gibbs_jafar}}.
-#'    Missing hyperparameters are assigned default values.
-#'    Supports both unsupervised and supervised (response-guided) settings.
+#' @description Helper function to set hyperparameters for \code{\link{gibbs_jfr}} and \code{\link{gibbs_jafar}}.
+#'  Supports both unsupervised and supervised settings.
+#'    
+#' @details Missing hyperparameters are assigned default values.
 #'
-#' @param hyperparams_list A named list of hyperparameters to be used in the model.
+#' @param hyperparams_list Named list of model hyperparameters.
 #' @param M Integer, number of data-views.
-#' @param is_supervised Logical, whether the model is supervised (default: FALSE).
+#' @param is_supervised Running supervised model (logical, default: \code{FALSE}).
 #'
 #' @return A named list of hyperparameters with defaults filled in where missing.
 #'    Scalar values are replicated \code{M} times where necessary.
 #'
-#' @details
+#' @note
 #' Default hyperparameters include:
 #' \itemize{
 #'   \item{\code{seed}: random seed for reproducibility (default: 123).}
@@ -28,7 +28,7 @@ is.scalar <- function(x){ is.atomic(x) && length(x) == 1L }
 #'      Scalar of vector of length \code{M} (default: \code{var_spike[m]=0.005}).
 #'   \item{\code{a_chi, b_chi}: hyperparameters for slab inverse-gamma prior in cusps.
 #'      Scalars of vectors of length \code{M} (default: \code{a_chi[m]=0.5, b_chi[m]=0.1}).}
-#'   \item{\code{alpha_L, alpha_G}: DP concentration parameters giving the expected number of factors, shared and local.
+#'   \item{\code{alpha_L, alpha_G}: Dirichlet process concentration parameters giving the expected number of factors, shared and local.
 #'      Scalars of vectors of length \code{M} (default: \code{alpha_L[m]=5, alpha_G[m]=5}).}
 #' }
 #' If \code{is_supervised = TRUE}, additional hyperparameters for the response model are
@@ -42,7 +42,7 @@ is.scalar <- function(x){ is.atomic(x) && length(x) == 1L }
 #'
 #' @export
 #' 
-jafar_set_hyperparameters <- function(hyperparams_list, M, is_supervised=FALSE) {
+set_hyperparameters <- function(hyperparams_list, M, is_supervised=FALSE) {
   
   # Define default values for each hyperparameter
   mcmc_defaults <- list(

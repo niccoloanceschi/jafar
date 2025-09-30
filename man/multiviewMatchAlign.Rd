@@ -2,17 +2,27 @@
 % Please edit documentation in R/jafar_postprocessing.R
 \name{multiviewMatchAlign}
 \alias{multiviewMatchAlign}
-\title{Perform rotational alignment using multi-view \code{MatchAlign}.}
+\title{Rotational alignment of latent factors and loading matrices}
 \usage{
-multiviewMatchAlign(ris_MCMC)
+multiviewMatchAlign(risMCMC)
 }
 \arguments{
-\item{risMCMC}{Posterior samples, as returned by \code{gibbs_jafar} or \code{gibbs_jfr}.}
+\item{risMCMC}{Posterior samples, as returned by \code{\link{gibbs_jafar}} or \code{\link{gibbs_jfr}}.}
 }
 \value{
 A modified version of the input \code{risMCMC}, with latent factors, loading matrices,
-and (if supervised) response loadings rotated according to multi-view \code{MatchAlign}.
+and response loadings (if supervised) rotated according to multi-view \code{MatchAlign}.
 }
 \description{
-Perform rotational alignment using multi-view \code{MatchAlign}.
+Post-processing routine to solve rotational ambiguity across MCMC samples of latent variables.
+The alignment is performed using multi-view \code{MatchAlign} on the shared component and regular \code{MatchAlign} on the specific ones.
+}
+\references{
+Anceschi N., Ferrari F., Dunson D. B., & Mallick H. (2025).
+\emph{Bayesian Joint Additive Factor Models for Multiview Learning}.
+\url{https://arxiv.org/abs/2406.00778}
+
+Poworoznek E., Anceschi N., Ferrari F., & Dunson D. B. (2025).
+\emph{Efficiently Resolving Rotational Ambiguity in Bayesian Matrix Sampling with Matching}.
+Bayesian Analysis, 1–22. \url{https://doi.org/10.1214/25-BA1544}
 }

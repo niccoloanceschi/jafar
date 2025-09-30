@@ -73,17 +73,24 @@ cdf_transform <- function(X_m,X_m_test=NULL){
   return(output)
 }
 
-#' predictors preprocess: center & rescale + cdf transform (optional)
+#' Multi-view data preprocessing
 #' 
-#' @param X_m Train set predictors
-#' @param X_m_test Test set predictors
-#' @param copula Apply cdf transformation
+#' @description Center and rescale, and apply feature-wise cdf transform (optional).
+#'  Multi-view data for out-of-sample observations can optionally be provided as input.
+#'  If so, the corresponding features are rescaled coherently with the training set.
 #' 
-#' @return List of preprocessed features and rescaling factors
+#' @param X_m Multi-view data for the training set. 
+#'  List of length \code{M}; m-th element: matrix \code{n x p_m[m]}.
+#' @param X_m_test Multi-view data for the test set.
+#'  List of length \code{M}; m-th element: matrix \code{nTest x p_m[m]}.
+#'  (optional, default: \code{NULL})
+#' @param copula Apply cdf transformation (logical, default: \code{FALSE})
+#' 
+#' @return List of pre-processed features and rescaling factors
 #'
 #' @export
 #' 
-preprocess_X <- function(X_m,X_m_test=NULL,copula=F){
+preprocess_X <- function(X_m,X_m_test=NULL,copula=FALSE){
   
   preprocess_X_m <- list()
 
@@ -140,11 +147,23 @@ preprocess_X <- function(X_m,X_m_test=NULL,copula=F){
   return(output)
 }
 
-#' response preprocess: center & rescale
+#' Response preprocessing
+#' 
+#' @description Center and rescale.
+#'  Response for out-of-sample observations can optionally be provided as input.
+#'  If so, the corresponding values are rescaled coherently with the training set.
 #' 
 #' @param yTrain Train set responses
-#' @param yTest Test set responses
-#' @return List of preprocessed responses and rescaling factors
+#' @param yTest Test set responses (optional, default, \code{NULL})
+#' 
+#' @return List of pre-processed responses and rescaling transformation
+#' 
+#' @note The output list includes:
+#' \itemize{
+#'    \item{\code{preprocess_y}: Transformation applied to ....}
+#'    \item{\code{yTrain}: ...}
+#'    \item{\code{yTest}: ...}
+#'  }
 #' 
 #' @export
 #' 
@@ -180,17 +199,23 @@ preprocess_y <- function(yTrain,yTest=NULL){
   return(output)
 }
 
-#' predictors preprocess: reorder features via hierarchical clustering for better visualization
+#' Optional pre-process of the multi-view data 
 #' 
-#' @param X_m Train set predictors
-#' @param X_m_test Test set predictors
+#' @description Reorder features via hierarchical clustering for better visualization.
+#'  Multi-view data for out-of-sample observations can optionally be provided as input.
+#'  If so, the corresponding features are re-ordered coherently with the training set.
+#' 
+#' @param X_m Multi-view data for the training set. 
+#'  List of length \code{M}; m-th element: matrix \code{n x p_m[m]}.
+#' @param X_m_test Multi-view data for the test set.
+#'  List of length \code{M}; m-th element: matrix \code{nTest x p_m[m]}.
 #' @param K0_HC Reference number of clusters for hierarchical clustering (default: 15)
 #' 
-#' @return List of preprocessed features and rescaling factors
+#' @return List of pre-processed features and rescaling transformations
 #'
 #' @export
 #' 
-features_reorder_HC <- function(X_m,X_m_test=NULL,K0_HC=15){
+reorder_features <- function(X_m,X_m_test=NULL,K0_HC=15){
   
   M <- length(X_m)
   p_m <- sapply(X_m,ncol)

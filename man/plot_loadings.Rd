@@ -2,24 +2,26 @@
 % Please edit documentation in R/jafar_plots.R
 \name{plot_loadings}
 \alias{plot_loadings}
-\title{Plot posterior means of factor loadings.}
+\title{Visualization of loadings matrices}
 \usage{
 plot_loadings(
   risMCMC,
   out_path = "~/Desktop/",
-  out_name_shared = "shared_loadings",
-  out_name_specific = "specific_loadings"
+  out_shared = "shared_loadings",
+  out_specific = "specific_loadings"
 )
 }
 \arguments{
-\item{risMCMC}{Posterior samples, output of \code{gibbs_jafar} or \code{gibbs_jfr}}
+\item{risMCMC}{Postprocesed posterior samples, output of \code{\link{multiviewMatchAlign}}}
 
 \item{out_path}{Output path where the generated plot will be saved}
 
-\item{out_name_shared}{Output file name for the shared component plot (default: "n_factors_shared")}
+\item{out_shared}{File name for the shared component plot (default: "n_factors_shared")}
 
-\item{out_name_specific}{Output file name for the specific components plot (default: "n_factor_specific")}
+\item{out_specific}{File name for the specific components plot (default: "n_factor_specific")}
 }
 \description{
-Rotational alignment must be performed in advanced through the function \code{multiviewMatchAlign}
+Plot posterior means of the loading matrices, including the response loadings in the supervised case.
+Rotational alignment must be performed in advance.
+To this end, make sure to provide in input the output of \code{\link{multiviewMatchAlign}}.
 }

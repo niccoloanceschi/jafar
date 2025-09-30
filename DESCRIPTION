@@ -1,9 +1,9 @@
 Package: jafar
 Type: Package
-Title: Joint Additive Factor Regression from Multi-View Data
+Title: Bayesian Joint Additive Factor Regression for Multi-View Learning
 Version: 0.1.0
 Authors@R: person("Niccolo", "Anceschi", email = "niccolo.anceschi@duke.edu", role = c("aut","cre"))
-Description: Fit supervised and unsupervised Bayesian integrative factor models on multi-view data.
+Description: The package implements two supervised Bayesian factor models for multi-view data integration. The baseline Joint Factor Regression (jfr) model captures the combined variation across multiple data views using a single set of latent factors. A more refined Joint Additive FActor Regression (jafar) model explicitly decomposes variation into shared and view-specific components. Both models leverage extensions of the cumulative shrinkage process prior, learning adaptively the number of factors in a fully Bayesian way.
 License: MIT + file LICENSE
 Encoding: UTF-8
 LazyData: true
