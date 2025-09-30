@@ -35,7 +35,7 @@ library(knitr)
 library(ggplot2)
 ```
 
-# Output Pat
+# Output Path
 
 Set the working directory where to save the results.
 Modify $\texttt{output_dir}$ if you want to save results elsewhere.
@@ -58,8 +58,7 @@ The response variable $\texttt{y}$ is a vector of length $\texttt{n}$.
 Test data must follow the same structure as the training data.
 
 ```{r}
-# data("Data")   # loads the dataset
-Data <- readRDS('~/Documents/GitHub/jafar_paper/data/Sec3_Simulations/Simulated_data_n200_s94.rds')
+data("Data", package = "jafar")
 ```
 
 ```{r}
@@ -118,8 +117,8 @@ Here, the remaining hyperparameters are set to their default values, which are b
 We refer to the main manuscript for further guidance and intuition on their roles.
 
 ```{r}
-tMCMC = 1000
-tBurnIn = 500
+tMCMC = 10000
+tBurnIn = 5000
 tThin = 10
 
 mcmc_seed=1234
@@ -221,7 +220,7 @@ This holds both for in-sample and out-of-sample observations.
 y_pred <- predict_y(X_m,mcmc_supervised)
 ```
 
-Built-in functions allow to visualize predicted values against the truth.
+Built-in functions allow to visualize mean predicted values and $90\%$ credible intervals against the truth.
 
 ```{r, message=FALSE, results='hide'}
 plot_predictions(y_pred,y,mcmc_supervised,out_path=output_dir)
